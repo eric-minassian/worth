@@ -29,13 +29,15 @@ afterPack: ./scripts/afterPack.mjs
 mac:
   category: public.app-category.finance
   target:
+    # `dmg` is what users download for the first install. `zip` is what the
+    # in-app updater streams for subsequent updates — smaller than a DMG,
+    # no mount/unmount dance, just unzip into a staging dir.
     - target: dmg
       arch:
         - arm64
-  # No Apple Developer ID — ad-hoc signing happens in the afterPack hook.
-  # Leaving `identity` unset lets electron-builder skip its own (optional)
-  # Developer ID lookup while the afterPack hook guarantees we end up with
-  # at least a `-` (ad-hoc) signature.
+    - target: zip
+      arch:
+        - arm64
   identity: null
   gatekeeperAssess: false
 

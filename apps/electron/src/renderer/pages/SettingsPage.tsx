@@ -1,6 +1,13 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import { queryOptions } from "@tanstack/react-query"
-import { Download, ExternalLink, RefreshCw, RotateCcw, Upload } from "lucide-react"
+import {
+  CheckCircle2,
+  Download,
+  ExternalLink,
+  RefreshCw,
+  RotateCcw,
+  Upload,
+} from "lucide-react"
 import { useEffect, useState } from "react"
 import type { UpdateChannel, UpdaterState } from "@worth/ipc"
 import {
@@ -42,6 +49,8 @@ export const SettingsPage = () => {
 
   const invalidateAll = () => qc.invalidateQueries()
 
+  // Main-process updater events stream through `onUpdateEvent` so the UI
+  // reflects download progress tick by tick without polling.
   useEffect(() => {
     const unsubscribe = window.worth.onUpdateEvent((raw) => {
       qc.setQueryData<UpdaterState>(updaterQuery.queryKey, raw as UpdaterState)
@@ -102,6 +111,16 @@ export const SettingsPage = () => {
     mutationFn: () => callCommand("updater.checkForUpdates", {}),
     onSuccess: (result) =>
       qc.setQueryData<UpdaterState>(updaterQuery.queryKey, result),
+  })
+
+  const downloadMutation = useMutation({
+    mutationFn: () => callCommand("updater.downloadUpdate", {}),
+    onSuccess: (result) =>
+      qc.setQueryData<UpdaterState>(updaterQuery.queryKey, result),
+  })
+
+  const installMutation = useMutation({
+    mutationFn: () => callCommand("updater.quitAndInstall", {}),
   })
 
   const setChannelMutation = useMutation({
@@ -199,17 +218,23 @@ export const SettingsPage = () => {
           <CardTitle className="text-base">Updates</CardTitle>
           <CardDescription>
             Stable tracks tagged releases. Nightly updates on every commit to main — useful for
-            trying out in-progress features, but occasionally rough. Worth is not code-signed,
-            so updates open the GitHub release page for a manual drag-into-Applications swap.
+            trying out in-progress features, but occasionally rough.
           </CardDescription>
         </CardHeader>
         <CardContent className="flex flex-col gap-4">
           <UpdaterPanel
             state={updater.data ?? null}
             onCheck={() => checkUpdatesMutation.mutate()}
+            onDownload={() => downloadMutation.mutate()}
+            onInstall={() => installMutation.mutate()}
             onOpenRelease={() => openReleaseMutation.mutate()}
             onChannelChange={(c) => setChannelMutation.mutate(c)}
-            busy={checkUpdatesMutation.isPending || setChannelMutation.isPending}
+            busy={
+              checkUpdatesMutation.isPending ||
+              downloadMutation.isPending ||
+              installMutation.isPending ||
+              setChannelMutation.isPending
+            }
           />
         </CardContent>
       </Card>
@@ -221,6 +246,8 @@ interface UpdaterPanelProps {
   readonly state: UpdaterState | null
   readonly busy: boolean
   readonly onCheck: () => void
+  readonly onDownload: () => void
+  readonly onInstall: () => void
   readonly onOpenRelease: () => void
   readonly onChannelChange: (channel: UpdateChannel) => void
 }
@@ -229,6 +256,8 @@ const UpdaterPanel = ({
   state,
   busy,
   onCheck,
+  onDownload,
+  onInstall,
   onOpenRelease,
   onChannelChange,
 }: UpdaterPanelProps) => {
@@ -244,7 +273,7 @@ const UpdaterPanel = ({
           <Select
             value={state.channel}
             onValueChange={(v) => onChannelChange(v as UpdateChannel)}
-            disabled={busy}
+            disabled={busy || state.status === "downloading" || state.status === "ready"}
           >
             <SelectTrigger className="mt-1 w-full">
               <SelectValue />
@@ -273,25 +302,25 @@ const UpdaterPanel = ({
         ) : null}
 
         {state.status === "available" ? (
-          <Button onClick={onOpenRelease}>
-            <ExternalLink /> Open {state.nextVersion} on GitHub
+          <Button onClick={onDownload} disabled={busy}>
+            <Download /> Download {state.nextVersion}
           </Button>
         ) : null}
 
-        {state.status === "available" || state.status === "not-available" ? (
-          <Button variant="secondary" onClick={onOpenRelease}>
-            <ExternalLink /> View release notes
+        {state.status === "ready" ? (
+          <Button onClick={onInstall} disabled={busy}>
+            <CheckCircle2 /> Install and relaunch
+          </Button>
+        ) : null}
+
+        {state.status === "available" ||
+        state.status === "not-available" ||
+        state.status === "ready" ? (
+          <Button variant="secondary" onClick={onOpenRelease} disabled={busy}>
+            <ExternalLink /> Release notes
           </Button>
         ) : null}
       </div>
-
-      {state.status === "available" ? (
-        <p className="text-xs text-muted-foreground">
-          Opening the release page downloads the DMG. Drag the new{" "}
-          <span className="font-mono">Worth.app</span> into Applications, replacing the old
-          one.
-        </p>
-      ) : null}
     </div>
   )
 }
@@ -319,11 +348,53 @@ const StatusLine = ({ state }: { readonly state: UpdaterState }) => {
           <span className="font-mono">{state.nextVersion}</span>
         </div>
       )
+    case "downloading": {
+      const pct =
+        state.total > 0
+          ? Math.max(0, Math.min(100, (state.transferred / state.total) * 100))
+          : 0
+      return (
+        <div className="flex flex-col gap-2">
+          <div className="text-sm">
+            Downloading <span className="font-mono">{state.nextVersion}</span> —{" "}
+            {pct.toFixed(0)}%
+          </div>
+          <div className="h-2 overflow-hidden rounded-full bg-muted">
+            <div
+              className="h-full bg-primary transition-[width] duration-150"
+              style={{ width: `${pct.toString()}%` }}
+            />
+          </div>
+          <div className="text-xs text-muted-foreground">
+            {formatBytes(state.transferred)} / {formatBytes(state.total)}
+          </div>
+        </div>
+      )
+    }
+    case "ready":
+      return (
+        <div className="text-sm text-emerald-500">
+          <span className="font-mono">{state.nextVersion}</span> downloaded. Click install
+          to relaunch into the new version.
+        </div>
+      )
     case "error":
       return (
-        <div className="text-sm text-destructive">Update check failed: {state.message}</div>
+        <div className="text-sm text-destructive">Update failed: {state.message}</div>
       )
   }
+}
+
+const formatBytes = (n: number): string => {
+  if (!Number.isFinite(n) || n <= 0) return "0 B"
+  const units = ["B", "KB", "MB", "GB"]
+  let i = 0
+  let v = n
+  while (v >= 1024 && i < units.length - 1) {
+    v /= 1024
+    i++
+  }
+  return `${v.toFixed(v < 10 ? 1 : 0)} ${units[i] ?? "B"}`
 }
 
 interface StatProps {

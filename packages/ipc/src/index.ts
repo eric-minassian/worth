@@ -266,6 +266,20 @@ export const UpdaterState = Schema.Union([
     releaseNotes: Schema.NullOr(Schema.String),
   }),
   Schema.Struct({
+    status: Schema.Literal("downloading"),
+    currentVersion: Schema.String,
+    channel: UpdateChannel,
+    nextVersion: Schema.String,
+    transferred: Schema.Number,
+    total: Schema.Number,
+  }),
+  Schema.Struct({
+    status: Schema.Literal("ready"),
+    currentVersion: Schema.String,
+    channel: UpdateChannel,
+    nextVersion: Schema.String,
+  }),
+  Schema.Struct({
     status: Schema.Literal("error"),
     currentVersion: Schema.String,
     channel: UpdateChannel,
@@ -284,6 +298,18 @@ export const UpdaterCheckForUpdatesCommand = defineCommand(
   "updater.checkForUpdates",
   Schema.Struct({}),
   UpdaterState,
+)
+
+export const UpdaterDownloadUpdateCommand = defineCommand(
+  "updater.downloadUpdate",
+  Schema.Struct({}),
+  UpdaterState,
+)
+
+export const UpdaterQuitAndInstallCommand = defineCommand(
+  "updater.quitAndInstall",
+  Schema.Struct({}),
+  Schema.Struct({ ok: Schema.Boolean }),
 )
 
 export const UpdaterSetChannelCommand = defineCommand(
@@ -321,6 +347,8 @@ export const Commands = {
   "system.rebuildProjections": SystemRebuildCommand,
   "updater.getState": UpdaterGetStateCommand,
   "updater.checkForUpdates": UpdaterCheckForUpdatesCommand,
+  "updater.downloadUpdate": UpdaterDownloadUpdateCommand,
+  "updater.quitAndInstall": UpdaterQuitAndInstallCommand,
   "updater.setChannel": UpdaterSetChannelCommand,
   "updater.openReleasePage": UpdaterOpenReleasePageCommand,
 } as const

@@ -20,16 +20,6 @@ Worth is **not code-signed** (no Apple Developer Program membership). The app an
 3. **First launch only:** open Finder, go to `Applications`, **right-click** (or Control-click) `Worth.app`, and choose **Open**. Confirm the dialog. Double-clicking won't work the first time — Gatekeeper blocks unsigned apps unless you explicitly open them once.
 4. After that, launch normally.
 
-#### Troubleshooting: *"Worth" is damaged and can't be opened*
-
-If you see this instead of the usual "unknown developer" prompt, macOS is refusing to launch the app because of the quarantine flag that gets set on any file downloaded from the internet. Run this in Terminal to clear it:
-
-```sh
-xattr -cr /Applications/Worth.app
-```
-
-Then launch normally. Builds since `v0.1.1` ad-hoc sign the bundle so this shouldn't be needed, but older DMGs or edge cases on newer macOS releases can still trip it.
-
 ### Updating
 
 Because the app is unsigned, macOS won't let it replace itself in place. Worth checks GitHub for new releases and surfaces them in **Settings → Updates** — click through to the release page, download the new DMG, and drag it into Applications over the old copy. Your data lives outside the bundle, so replacing the app preserves everything.

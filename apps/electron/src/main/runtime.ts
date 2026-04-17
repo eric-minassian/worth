@@ -52,8 +52,8 @@ const HlcClockFromDb = Layer.effect(HlcClock)(
   }),
 )
 
-export const makeAppLayer = (dbFilename: string) => {
-  const dbStack = DbLive.pipe(Layer.provide(DbConfigLive(dbFilename)))
+export const makeAppLayer = (dbFilename: string, password: string) => {
+  const dbStack = DbLive.pipe(Layer.provide(DbConfigLive(dbFilename, password)))
   const clockStack = HlcClockFromDb.pipe(Layer.provide(dbStack))
   const eventLog = EventLogLive.pipe(Layer.provide(Layer.merge(dbStack, clockStack)))
   const base = Layer.mergeAll(dbStack, clockStack, eventLog)
@@ -68,10 +68,11 @@ export const makeAppLayer = (dbFilename: string) => {
   )
 }
 
-export type AppRuntime = ManagedRuntime.ManagedRuntime<
-  ReturnType<typeof makeAppLayer> extends Layer.Layer<infer A> ? A : never,
-  never
->
+type AppLayer = ReturnType<typeof makeAppLayer>
+type AppContext = Layer.Success<AppLayer>
+type AppLayerError = Layer.Error<AppLayer>
 
-export const createAppRuntime = (dbFilename: string): AppRuntime =>
-  ManagedRuntime.make(makeAppLayer(dbFilename))
+export type AppRuntime = ManagedRuntime.ManagedRuntime<AppContext, AppLayerError>
+
+export const createAppRuntime = (dbFilename: string, password: string): AppRuntime =>
+  ManagedRuntime.make(makeAppLayer(dbFilename, password))

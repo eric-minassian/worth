@@ -33,7 +33,17 @@ export type Handlers = { readonly [K in CommandKind]: CommandHandler<K> }
 
 const decodeExport = Schema.decodeUnknownResult(ExportFile)
 
+// vault.* commands are intercepted by the RPC handler before dispatch — these
+// stubs exist only to satisfy the exhaustive Handlers map.
+const unreachableVault = (): never => {
+  throw new Error("vault.* commands must be handled outside the app runtime")
+}
+
 export const handlers: Handlers = {
+  "vault.status": () => Effect.sync(unreachableVault),
+  "vault.unlock": () => Effect.sync(unreachableVault),
+  "vault.lock": () => Effect.sync(unreachableVault),
+
   ping: (input) =>
     Effect.sync(() => ({
       message: `pong: ${input.message}`,

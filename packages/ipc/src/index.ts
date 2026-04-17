@@ -229,6 +229,40 @@ export const SystemRebuildCommand = defineCommand(
   Schema.Struct({ replayed: Schema.Number }),
 )
 
+// -- Vault commands ---------------------------------------------------------
+
+/**
+ * Whether the encrypted DB file exists on disk. Drives the initial unlock
+ * screen: if `initialized` is false, the renderer asks the user to *set* a
+ * password; otherwise it asks to *unlock* with an existing password.
+ */
+export const VaultStatusCommand = defineCommand(
+  "vault.status",
+  Schema.Struct({}),
+  Schema.Struct({
+    initialized: Schema.Boolean,
+    unlocked: Schema.Boolean,
+  }),
+)
+
+export const VaultUnlockCommand = defineCommand(
+  "vault.unlock",
+  Schema.Struct({ password: Schema.String }),
+  Schema.Union([
+    Schema.Struct({ ok: Schema.Literal(true) }),
+    Schema.Struct({
+      ok: Schema.Literal(false),
+      reason: Schema.Literals(["wrong-password", "corrupt"]),
+    }),
+  ]),
+)
+
+export const VaultLockCommand = defineCommand(
+  "vault.lock",
+  Schema.Struct({}),
+  Schema.Struct({ ok: Schema.Boolean }),
+)
+
 // -- Updater commands -------------------------------------------------------
 
 export const UpdateChannel = Schema.Literals(["stable", "nightly"])
@@ -345,6 +379,9 @@ export const Commands = {
   "system.export": SystemExportCommand,
   "system.import": SystemImportCommand,
   "system.rebuildProjections": SystemRebuildCommand,
+  "vault.status": VaultStatusCommand,
+  "vault.unlock": VaultUnlockCommand,
+  "vault.lock": VaultLockCommand,
   "updater.getState": UpdaterGetStateCommand,
   "updater.checkForUpdates": UpdaterCheckForUpdatesCommand,
   "updater.downloadUpdate": UpdaterDownloadUpdateCommand,

@@ -4,10 +4,12 @@ import {
   RpcRequestEnvelope,
   type CommandKind,
   type InputOf,
+  type OutputOf,
   type RpcResponseEnvelope,
 } from "@worth/ipc"
 import { handlers } from "./handlers"
 import type { AppRuntime } from "./runtime"
+import type { VaultController } from "./vault"
 
 const isCommandKind = (kind: string): kind is CommandKind =>
   Object.prototype.hasOwnProperty.call(Commands, kind)
@@ -34,8 +36,26 @@ const causeToError = (cause: Cause.Cause<unknown>): { _tag: string; message: str
   return { _tag: "Defect", message: Cause.pretty(cause) }
 }
 
+const encodeOutput = <K extends CommandKind>(
+  kind: K,
+  value: OutputOf<K>,
+): RpcResponseEnvelope => {
+  const command = Commands[kind]
+  const encoded = Schema.encodeUnknownResult(command.output)(value)
+  if (encoded._tag === "Failure") {
+    return {
+      ok: false,
+      error: {
+        _tag: "OutputEncodeError",
+        message: `Failed to encode "${kind}" output: ${formatIssue(encoded.failure)}`,
+      },
+    }
+  }
+  return { ok: true, value: encoded.success }
+}
+
 export const makeRpcHandler =
-  (runtime: AppRuntime) =>
+  (vault: VaultController) =>
   async (raw: unknown): Promise<RpcResponseEnvelope> => {
     const decoded = decodeEnvelope(raw)
     if (decoded._tag === "Failure") {
@@ -51,6 +71,42 @@ export const makeRpcHandler =
 
     if (!isCommandKind(kind)) {
       return { ok: false, error: { _tag: "UnknownCommand", message: `Unknown command: ${kind}` } }
+    }
+
+    if (kind === "vault.status") {
+      return encodeOutput("vault.status", {
+        initialized: vault.isInitialized(),
+        unlocked: vault.isUnlocked(),
+      })
+    }
+
+    if (kind === "vault.unlock") {
+      const command = Commands["vault.unlock"]
+      const decodedInput = Schema.decodeUnknownResult(command.input)(input)
+      if (decodedInput._tag === "Failure") {
+        return {
+          ok: false,
+          error: {
+            _tag: "InvalidInput",
+            message: `Invalid input for "vault.unlock": ${formatIssue(decodedInput.failure)}`,
+          },
+        }
+      }
+      const result = await vault.unlock(decodedInput.success.password)
+      return encodeOutput("vault.unlock", result)
+    }
+
+    if (kind === "vault.lock") {
+      await vault.lock()
+      return encodeOutput("vault.lock", { ok: true })
+    }
+
+    const runtime = vault.getRuntime()
+    if (!runtime) {
+      return {
+        ok: false,
+        error: { _tag: "Locked", message: "Vault is locked. Call vault.unlock first." },
+      }
     }
 
     return dispatch(runtime, kind, input)
@@ -81,15 +137,5 @@ const dispatch = async <K extends CommandKind>(
     return { ok: false, error: causeToError(exit.cause) }
   }
 
-  const encoded = Schema.encodeUnknownResult(command.output)(exit.value)
-  if (encoded._tag === "Failure") {
-    return {
-      ok: false,
-      error: {
-        _tag: "OutputEncodeError",
-        message: `Failed to encode "${kind}" output: ${formatIssue(encoded.failure)}`,
-      },
-    }
-  }
-  return { ok: true, value: encoded.success }
+  return encodeOutput(kind, exit.value as OutputOf<K>)
 }

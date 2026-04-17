@@ -18,7 +18,7 @@ const USD = "USD" as CurrencyCode
 const testDevice = "test-device" as DeviceId
 
 const makeTestRuntime = () => {
-  const dbStack = DbLive.pipe(Layer.provide(DbConfigLive(":memory:")))
+  const dbStack = DbLive.pipe(Layer.provide(DbConfigLive(":memory:", "test-password")))
   const clockStack = HlcClockLive({ deviceId: testDevice })
   const eventLog = EventLogLive.pipe(Layer.provide(Layer.merge(dbStack, clockStack)))
   const base = Layer.mergeAll(dbStack, clockStack, eventLog)

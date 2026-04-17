@@ -3,10 +3,10 @@ import path from "node:path"
 import { Effect } from "effect"
 import { RPC_CHANNEL } from "@worth/ipc"
 import { makeRpcHandler } from "./rpc"
-import { createAppRuntime } from "./runtime"
+import { makeVaultController } from "./vault"
 import { Updater } from "./updater"
 
-const createWindow = (): void => {
+const createWindow = (): BrowserWindow => {
   const win = new BrowserWindow({
     width: 1200,
     height: 800,
@@ -28,6 +28,7 @@ const createWindow = (): void => {
   } else {
     void win.loadFile(path.join(__dirname, "../renderer/index.html"))
   }
+  return win
 }
 
 const dbPath = (): string => {
@@ -36,34 +37,47 @@ const dbPath = (): string => {
   return path.join(app.getPath("userData"), "worth.db")
 }
 
-app.whenReady().then(() => {
-  const runtime = createAppRuntime(dbPath())
-  const handleRpc = makeRpcHandler(runtime)
+let updateCheckScheduled = false
 
-  ipcMain.handle(RPC_CHANNEL, async (_event, request: unknown) => handleRpc(request))
+app.whenReady().then(() => {
+  const vault = makeVaultController(dbPath())
+  const handleRpc = makeRpcHandler(vault)
+
+  ipcMain.handle(RPC_CHANNEL, async (_event, request: unknown) => {
+    const response = await handleRpc(request)
+    // Kick off a deferred update check the first time the vault is unlocked.
+    // We gate the updater on unlock because it lives inside the app runtime.
+    if (!updateCheckScheduled && vault.isUnlocked()) {
+      updateCheckScheduled = true
+      setTimeout(() => {
+        const rt = vault.getRuntime()
+        if (!rt) return
+        void rt.runPromise(
+          Effect.gen(function* () {
+            const updater = yield* Updater
+            yield* Effect.promise(() => updater.checkForUpdates())
+          }),
+        )
+      }, 5_000)
+    }
+    return response
+  })
 
   app.on("before-quit", () => {
-    void runtime.dispose()
+    void vault.lock()
+  })
+
+  // Re-lock whenever every window is closed. On macOS the app stays alive,
+  // so reopening from the dock must re-prompt for the password.
+  app.on("window-all-closed", () => {
+    updateCheckScheduled = false
+    void vault.lock()
+    if (process.platform !== "darwin") app.quit()
   })
 
   createWindow()
 
-  // Kick off an initial update check a few seconds after launch so the window
-  // can paint first and we don't block on network during startup.
-  setTimeout(() => {
-    void runtime.runPromise(
-      Effect.gen(function* () {
-        const updater = yield* Updater
-        yield* Effect.promise(() => updater.checkForUpdates())
-      }),
-    )
-  }, 5_000)
-
   app.on("activate", () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow()
   })
-})
-
-app.on("window-all-closed", () => {
-  if (process.platform !== "darwin") app.quit()
 })

@@ -22,7 +22,7 @@
     "@worth/ipc": "workspace:*",
     "@worth/sync": "workspace:*",
     "@worth/ui": "workspace:*",
-    "better-sqlite3": "^12.9.0",
+    "better-sqlite3": "npm:better-sqlite3-multiple-ciphers@^12.9.0",
     "drizzle-orm": "^0.45.2",
     "effect": "4.0.0-beta.50",
     "lucide-react": "^1.8.0",

@@ -1,4 +1,5 @@
-import { useState, type FormEvent } from "react"
+import { useEffect, useState, type FormEvent } from "react"
+import { Fingerprint } from "lucide-react"
 import {
   Alert,
   AlertDescription,
@@ -17,7 +18,7 @@ import { WorthMark } from "../components/WorthMark"
 
 interface UnlockProps {
   readonly initialized: boolean
-  readonly onUnlocked: () => void
+  readonly onUnlocked: (via: "password" | "biometric") => void
 }
 
 export const Unlock = ({ initialized, onUnlocked }: UnlockProps) => {
@@ -25,6 +26,52 @@ export const Unlock = ({ initialized, onUnlocked }: UnlockProps) => {
   const [confirm, setConfirm] = useState("")
   const [error, setError] = useState<string | null>(null)
   const [submitting, setSubmitting] = useState(false)
+  const [biometricAvailable, setBiometricAvailable] = useState(false)
+  const [biometricEnabled, setBiometricEnabled] = useState(false)
+  const [biometricPending, setBiometricPending] = useState(false)
+
+  const tryBiometric = async () => {
+    setError(null)
+    setBiometricPending(true)
+    try {
+      const result = await callCommand("vault.unlockBiometric", {})
+      if (result.ok) {
+        onUnlocked("biometric")
+        return
+      }
+      if (result.reason === "user-cancelled") return
+      if (result.reason === "not-enabled" || result.reason === "unavailable") {
+        setBiometricEnabled(false)
+        return
+      }
+      if (result.reason === "wrong-password") {
+        setBiometricEnabled(false)
+        setError("Stored Touch ID credential is out of date. Enter your password.")
+        return
+      }
+      setError("Database file appears corrupt.")
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : String(cause))
+    } finally {
+      setBiometricPending(false)
+    }
+  }
+
+  useEffect(() => {
+    if (!initialized) return
+    let cancelled = false
+    void callCommand("vault.biometricStatus", {}).then((status) => {
+      if (cancelled) return
+      setBiometricAvailable(status.available)
+      setBiometricEnabled(status.enabled)
+      if (status.available && status.enabled) {
+        void tryBiometric()
+      }
+    })
+    return () => {
+      cancelled = true
+    }
+  }, [initialized])
 
   const onSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
@@ -43,7 +90,7 @@ export const Unlock = ({ initialized, onUnlocked }: UnlockProps) => {
     try {
       const result = await callCommand("vault.unlock", { password })
       if (result.ok) {
-        onUnlocked()
+        onUnlocked("password")
         return
       }
       setError(
@@ -57,6 +104,9 @@ export const Unlock = ({ initialized, onUnlocked }: UnlockProps) => {
       setSubmitting(false)
     }
   }
+
+  const showBiometricButton =
+    initialized && biometricAvailable && biometricEnabled
 
   return (
     <div className="flex h-full items-center justify-center bg-background p-6">
@@ -80,7 +130,7 @@ export const Unlock = ({ initialized, onUnlocked }: UnlockProps) => {
                 autoFocus
                 value={password}
                 onChange={(event) => setPassword(event.target.value)}
-                disabled={submitting}
+                disabled={submitting || biometricPending}
               />
             </div>
             {!initialized ? (
@@ -91,7 +141,7 @@ export const Unlock = ({ initialized, onUnlocked }: UnlockProps) => {
                   type="password"
                   value={confirm}
                   onChange={(event) => setConfirm(event.target.value)}
-                  disabled={submitting}
+                  disabled={submitting || biometricPending}
                 />
               </div>
             ) : null}
@@ -101,13 +151,24 @@ export const Unlock = ({ initialized, onUnlocked }: UnlockProps) => {
                 <AlertDescription>{error}</AlertDescription>
               </Alert>
             ) : null}
-            <Button type="submit" disabled={submitting}>
+            <Button type="submit" disabled={submitting || biometricPending}>
               {submitting
                 ? "Unlocking…"
                 : initialized
                   ? "Unlock"
                   : "Create vault"}
             </Button>
+            {showBiometricButton ? (
+              <Button
+                type="button"
+                variant="secondary"
+                disabled={submitting || biometricPending}
+                onClick={() => void tryBiometric()}
+              >
+                <Fingerprint />
+                {biometricPending ? "Waiting for Touch ID…" : "Unlock with Touch ID"}
+              </Button>
+            ) : null}
           </form>
         </CardContent>
       </Card>

@@ -101,6 +101,25 @@ export const makeRpcHandler =
       return encodeOutput("vault.lock", { ok: true })
     }
 
+    if (kind === "vault.biometricStatus") {
+      return encodeOutput("vault.biometricStatus", vault.biometricStatus())
+    }
+
+    if (kind === "vault.enableBiometric") {
+      const result = await vault.enableBiometric()
+      return encodeOutput("vault.enableBiometric", result)
+    }
+
+    if (kind === "vault.disableBiometric") {
+      const result = await vault.disableBiometric()
+      return encodeOutput("vault.disableBiometric", result)
+    }
+
+    if (kind === "vault.unlockBiometric") {
+      const result = await vault.unlockBiometric()
+      return encodeOutput("vault.unlockBiometric", result)
+    }
+
     const runtime = vault.getRuntime()
     if (!runtime) {
       return {

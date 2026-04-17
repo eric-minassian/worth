@@ -263,6 +263,51 @@ export const VaultLockCommand = defineCommand(
   Schema.Struct({ ok: Schema.Boolean }),
 )
 
+export const VaultBiometricStatusCommand = defineCommand(
+  "vault.biometricStatus",
+  Schema.Struct({}),
+  Schema.Struct({
+    available: Schema.Boolean,
+    enabled: Schema.Boolean,
+  }),
+)
+
+export const VaultEnableBiometricCommand = defineCommand(
+  "vault.enableBiometric",
+  Schema.Struct({}),
+  Schema.Union([
+    Schema.Struct({ ok: Schema.Literal(true) }),
+    Schema.Struct({
+      ok: Schema.Literal(false),
+      reason: Schema.Literals(["unavailable", "locked"]),
+    }),
+  ]),
+)
+
+export const VaultDisableBiometricCommand = defineCommand(
+  "vault.disableBiometric",
+  Schema.Struct({}),
+  Schema.Struct({ ok: Schema.Boolean }),
+)
+
+export const VaultUnlockBiometricCommand = defineCommand(
+  "vault.unlockBiometric",
+  Schema.Struct({}),
+  Schema.Union([
+    Schema.Struct({ ok: Schema.Literal(true) }),
+    Schema.Struct({
+      ok: Schema.Literal(false),
+      reason: Schema.Literals([
+        "wrong-password",
+        "corrupt",
+        "user-cancelled",
+        "unavailable",
+        "not-enabled",
+      ]),
+    }),
+  ]),
+)
+
 // -- Updater commands -------------------------------------------------------
 
 export const UpdateChannel = Schema.Literals(["stable", "nightly"])
@@ -382,6 +427,10 @@ export const Commands = {
   "vault.status": VaultStatusCommand,
   "vault.unlock": VaultUnlockCommand,
   "vault.lock": VaultLockCommand,
+  "vault.biometricStatus": VaultBiometricStatusCommand,
+  "vault.enableBiometric": VaultEnableBiometricCommand,
+  "vault.disableBiometric": VaultDisableBiometricCommand,
+  "vault.unlockBiometric": VaultUnlockBiometricCommand,
   "updater.getState": UpdaterGetStateCommand,
   "updater.checkForUpdates": UpdaterCheckForUpdatesCommand,
   "updater.downloadUpdate": UpdaterDownloadUpdateCommand,

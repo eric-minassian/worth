@@ -4,6 +4,7 @@ import {
   CheckCircle2,
   Download,
   ExternalLink,
+  Fingerprint,
   RefreshCw,
   RotateCcw,
   Upload,
@@ -58,10 +59,17 @@ const updaterQuery = queryOptions({
   staleTime: 0,
 })
 
+const biometricQuery = queryOptions({
+  queryKey: ["vault.biometricStatus"] as const,
+  queryFn: () => callCommand("vault.biometricStatus", {}),
+  staleTime: Infinity,
+})
+
 export const SettingsPage = () => {
   const qc = useQueryClient()
   const stats = useQuery(statsQuery)
   const updater = useQuery(updaterQuery)
+  const biometric = useQuery(biometricQuery)
   const [rebuildOpen, setRebuildOpen] = useState(false)
 
   useEffect(() => {
@@ -132,12 +140,39 @@ export const SettingsPage = () => {
     mutationFn: () => callCommand("updater.openReleasePage", {}),
   })
 
+  const enableBiometricMutation = useMutation({
+    mutationFn: () => callCommand("vault.enableBiometric", {}),
+    onSuccess: async (result) => {
+      if (result.ok) {
+        await qc.invalidateQueries({ queryKey: biometricQuery.queryKey })
+        toast.success("Touch ID enabled")
+        return
+      }
+      toast.error(
+        result.reason === "unavailable"
+          ? "Touch ID is not available on this device."
+          : "Unlock the vault first.",
+      )
+    },
+    onError: (e) => toast.error(formatRpcError(e)),
+  })
+
+  const disableBiometricMutation = useMutation({
+    mutationFn: () => callCommand("vault.disableBiometric", {}),
+    onSuccess: async () => {
+      await qc.invalidateQueries({ queryKey: biometricQuery.queryKey })
+      toast.success("Touch ID disabled")
+    },
+    onError: (e) => toast.error(formatRpcError(e)),
+  })
+
 
   return (
     <div className="mx-auto flex max-w-4xl flex-col gap-6 px-8 py-6">
       <Tabs defaultValue="overview">
         <TabsList>
           <TabsTrigger value="overview">Overview</TabsTrigger>
+          <TabsTrigger value="security">Security</TabsTrigger>
           <TabsTrigger value="backup">Backup</TabsTrigger>
           <TabsTrigger value="updates">Updates</TabsTrigger>
         </TabsList>
@@ -203,6 +238,51 @@ export const SettingsPage = () => {
                   </AlertDialogFooter>
                 </AlertDialogContent>
               </AlertDialog>
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="security" className="flex flex-col gap-4">
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-sm">Touch ID</CardTitle>
+              <CardDescription className="text-xs">
+                Unlock Worth with Touch ID instead of your password. Your
+                password is encrypted with the system keychain; the Touch ID
+                prompt gates access on each unlock.
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              {biometric.data && !biometric.data.available ? (
+                <p className="text-xs text-muted-foreground">
+                  Touch ID is not available on this device.
+                </p>
+              ) : biometric.data?.enabled ? (
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  onClick={() => disableBiometricMutation.mutate()}
+                  disabled={disableBiometricMutation.isPending}
+                >
+                  <Fingerprint />
+                  {disableBiometricMutation.isPending
+                    ? "Disabling…"
+                    : "Disable Touch ID"}
+                </Button>
+              ) : (
+                <Button
+                  size="sm"
+                  onClick={() => enableBiometricMutation.mutate()}
+                  disabled={
+                    enableBiometricMutation.isPending || !biometric.data
+                  }
+                >
+                  <Fingerprint />
+                  {enableBiometricMutation.isPending
+                    ? "Enabling…"
+                    : "Enable Touch ID"}
+                </Button>
+              )}
             </CardContent>
           </Card>
         </TabsContent>

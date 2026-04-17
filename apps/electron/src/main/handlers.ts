@@ -43,6 +43,10 @@ export const handlers: Handlers = {
   "vault.status": () => Effect.sync(unreachableVault),
   "vault.unlock": () => Effect.sync(unreachableVault),
   "vault.lock": () => Effect.sync(unreachableVault),
+  "vault.biometricStatus": () => Effect.sync(unreachableVault),
+  "vault.enableBiometric": () => Effect.sync(unreachableVault),
+  "vault.disableBiometric": () => Effect.sync(unreachableVault),
+  "vault.unlockBiometric": () => Effect.sync(unreachableVault),
 
   ping: (input) =>
     Effect.sync(() => ({

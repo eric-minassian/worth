@@ -3,6 +3,7 @@ import { RouterProvider } from "@tanstack/react-router"
 import { useEffect, useState } from "react"
 import { router } from "./routes"
 import { Unlock } from "./pages/Unlock"
+import { BiometricEnrollPrompt } from "./components/BiometricEnrollPrompt"
 import { callCommand } from "./rpc"
 
 const queryClient = new QueryClient({
@@ -17,7 +18,7 @@ const queryClient = new QueryClient({
 type VaultState =
   | { status: "checking" }
   | { status: "locked"; initialized: boolean }
-  | { status: "unlocked" }
+  | { status: "unlocked"; via: "password" | "biometric" | null }
 
 export const App = () => {
   const [vault, setVault] = useState<VaultState>({ status: "checking" })
@@ -28,7 +29,7 @@ export const App = () => {
       if (cancelled) return
       setVault(
         result.unlocked
-          ? { status: "unlocked" }
+          ? { status: "unlocked", via: null }
           : { status: "locked", initialized: result.initialized },
       )
     })
@@ -45,7 +46,7 @@ export const App = () => {
     return (
       <Unlock
         initialized={vault.initialized}
-        onUnlocked={() => setVault({ status: "unlocked" })}
+        onUnlocked={(via) => setVault({ status: "unlocked", via })}
       />
     )
   }
@@ -53,6 +54,7 @@ export const App = () => {
   return (
     <QueryClientProvider client={queryClient}>
       <RouterProvider router={router} />
+      {vault.via === "password" ? <BiometricEnrollPrompt /> : null}
     </QueryClientProvider>
   )
 }

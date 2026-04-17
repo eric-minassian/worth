@@ -14,6 +14,7 @@
     "@worth/domain": "workspace:*",
     "@worth/importers": "workspace:*",
     "@worth/sync": "workspace:*",
-    "effect": "beta"
+    "drizzle-orm": "^0.45.2",
+    "effect": "4.0.0-beta.50"
   }
 }

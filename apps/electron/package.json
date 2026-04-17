@@ -10,22 +10,29 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "@tanstack/react-query": "^5.99.0",
+    "@tanstack/react-router": "^1.168.22",
     "@worth/core": "workspace:*",
+    "@worth/db": "workspace:*",
     "@worth/domain": "workspace:*",
     "@worth/ipc": "workspace:*",
+    "@worth/sync": "workspace:*",
     "@worth/ui": "workspace:*",
-    "effect": "beta",
-    "react": "^19.0.0",
-    "react-dom": "^19.0.0"
+    "better-sqlite3": "^12.9.0",
+    "drizzle-orm": "^0.45.2",
+    "effect": "4.0.0-beta.50",
+    "lucide-react": "^1.8.0",
+    "react": "^19.2.5",
+    "react-dom": "^19.2.5"
   },
   "devDependencies": {
-    "@tailwindcss/vite": "^4.0.0",
-    "@types/react": "^19.0.2",
-    "@types/react-dom": "^19.0.2",
-    "@vitejs/plugin-react": "^4.3.4",
+    "@tailwindcss/vite": "^4.2.2",
+    "@types/react": "^19.2.14",
+    "@types/react-dom": "^19.2.3",
+    "@vitejs/plugin-react": "^6.0.1",
     "electron": "^41.2.1",
-    "electron-vite": "^5.0.0",
-    "tailwindcss": "^4.0.0",
-    "vite": "^6.0.3"
+    "electron-vite": "6.0.0-beta.1",
+    "tailwindcss": "^4.2.2",
+    "vite": "^8.0.8"
   }
 }

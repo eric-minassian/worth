@@ -1,7 +1,8 @@
 import { app, BrowserWindow, ipcMain } from "electron"
 import path from "node:path"
 import { RPC_CHANNEL } from "@worth/ipc"
-import { handleRpc } from "./rpc"
+import { makeRpcHandler } from "./rpc"
+import { createAppRuntime } from "./runtime"
 
 const createWindow = (): void => {
   const win = new BrowserWindow({
@@ -27,8 +28,22 @@ const createWindow = (): void => {
   }
 }
 
+const dbPath = (): string => {
+  const override = process.env["WORTH_DB_PATH"]
+  if (override) return override
+  return path.join(app.getPath("userData"), "worth.db")
+}
+
 app.whenReady().then(() => {
+  const runtime = createAppRuntime(dbPath())
+  const handleRpc = makeRpcHandler(runtime)
+
   ipcMain.handle(RPC_CHANNEL, async (_event, request: unknown) => handleRpc(request))
+
+  app.on("before-quit", () => {
+    void runtime.dispose()
+  })
+
   createWindow()
 
   app.on("activate", () => {

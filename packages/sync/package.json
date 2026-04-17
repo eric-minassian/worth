@@ -11,6 +11,9 @@
   },
   "dependencies": {
     "@worth/domain": "workspace:*",
-    "effect": "beta"
+    "effect": "4.0.0-beta.50"
+  },
+  "devDependencies": {
+    "@types/node": "^25.6.0"
   }
 }

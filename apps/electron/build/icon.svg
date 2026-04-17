@@ -1,0 +1,23 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#115e59"/>
+      <stop offset="100%" stop-color="#064e3b"/>
+    </linearGradient>
+  </defs>
+
+  <!-- Rounded-square background matches modern macOS app-icon geometry. -->
+  <rect x="0" y="0" width="1024" height="1024" rx="224" ry="224" fill="url(#bg)"/>
+
+  <!-- The W reads as four strokes: outer down, inner up, inner down, outer up.
+       Subtle asymmetry — the right peak sits a hair higher than the left —
+       gives the glyph a quiet "up-and-to-the-right" chart lean. -->
+  <path
+    d="M 196 296 L 372 752 L 512 436 L 652 752 L 828 276"
+    fill="none"
+    stroke="#ffffff"
+    stroke-width="112"
+    stroke-linecap="round"
+    stroke-linejoin="round"
+  />
+</svg>

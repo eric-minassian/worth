@@ -1,0 +1,64 @@
+appId: com.ericminassian.worth
+productName: Worth
+copyright: Copyright © Eric Minassian
+
+directories:
+  output: dist
+  buildResources: build
+
+# The electron-vite build emits to out/. Bundle that plus package metadata.
+# better-sqlite3's native .node must be unpacked from asar so dlopen can find it.
+files:
+  - out/**/*
+  - package.json
+  - "!**/node_modules/*/{CHANGELOG.md,README.md,README,readme.md,readme}"
+  - "!**/node_modules/*/{test,__tests__,tests,powered-test,example,examples}"
+  - "!**/*.map"
+
+asar: true
+asarUnpack:
+  - "**/better-sqlite3/**"
+  - "**/bindings/**"
+  - "**/file-uri-to-path/**"
+
+# Single-channel per-build. The CI sets package.json version:
+#   stable tag  → "1.2.3"        → publishes latest.yml  (stable channel)
+#   nightly     → "X.Y.Z-nightly.<ts>.<sha>" → publishes nightly.yml
+# electron-builder parses the prerelease tag and routes the feed file.
+generateUpdatesFilesForAllChannels: false
+
+mac:
+  category: public.app-category.finance
+  target:
+    - target: dmg
+      arch:
+        - arm64
+  # App is not code-signed — Apple Developer Program ($99/yr) is not used.
+  # Explicitly disable signing so electron-builder doesn't try and fail.
+  identity: null
+  # We do not distribute a notarized build; omit entitlements/hardened runtime.
+  gatekeeperAssess: false
+
+win:
+  target:
+    - target: nsis
+      arch:
+        - x64
+
+nsis:
+  oneClick: false
+  allowToChangeInstallationDirectory: true
+  perMachine: false
+
+linux:
+  category: Office
+  target:
+    - target: AppImage
+      arch:
+        - x64
+
+publish:
+  provider: github
+  owner: eric-minassian
+  repo: worth
+  releaseType: release

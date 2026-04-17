@@ -11,6 +11,7 @@ import {
 import { Db, DbConfigLive, DbLive, schema } from "@worth/db"
 import type { DeviceId, Hlc } from "@worth/domain"
 import { HlcClock, makeHlcClock, newDeviceId } from "@worth/sync"
+import { UpdaterLive } from "./updater"
 
 const DEVICE_ID_KEY = "device_id"
 const LAST_HLC_KEY = "last_hlc"
@@ -63,6 +64,7 @@ export const makeAppLayer = (dbFilename: string) => {
     ImportServiceLive.pipe(Layer.provide(base)),
     SystemServiceLive.pipe(Layer.provide(base)),
     TransactionServiceLive.pipe(Layer.provide(base)),
+    UpdaterLive.pipe(Layer.provide(base)),
   )
 }
 

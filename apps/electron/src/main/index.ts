@@ -1,8 +1,10 @@
 import { app, BrowserWindow, ipcMain } from "electron"
 import path from "node:path"
+import { Effect } from "effect"
 import { RPC_CHANNEL } from "@worth/ipc"
 import { makeRpcHandler } from "./rpc"
 import { createAppRuntime } from "./runtime"
+import { Updater } from "./updater"
 
 const createWindow = (): void => {
   const win = new BrowserWindow({
@@ -41,10 +43,27 @@ app.whenReady().then(() => {
   ipcMain.handle(RPC_CHANNEL, async (_event, request: unknown) => handleRpc(request))
 
   app.on("before-quit", () => {
+    void runtime.runPromise(
+      Effect.gen(function* () {
+        const updater = yield* Updater
+        updater.dispose()
+      }),
+    )
     void runtime.dispose()
   })
 
   createWindow()
+
+  // Kick off an initial update check a few seconds after launch so the window
+  // can paint first and we don't block on network during startup.
+  setTimeout(() => {
+    void runtime.runPromise(
+      Effect.gen(function* () {
+        const updater = yield* Updater
+        yield* Effect.promise(() => updater.checkForUpdates())
+      }),
+    )
+  }, 5_000)
 
   app.on("activate", () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow()

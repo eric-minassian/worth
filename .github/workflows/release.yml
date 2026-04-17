@@ -1,0 +1,87 @@
+name: Release (stable)
+
+# Triggered by a `vX.Y.Z` tag. Builds Worth for macOS (arm64), Windows (x64),
+# and Linux (x64) and publishes a GitHub Release with a `latest.yml` update
+# feed that electron-updater clients on the "stable" channel pick up.
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Tag to build (e.g. v1.2.3). Omit on tag push."
+        required: false
+        type: string
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    name: Build ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: macos-14
+            platform: mac
+          - os: windows-latest
+            platform: win
+          - os: ubuntu-latest
+            platform: linux
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Resolve tag
+        id: tag
+        shell: bash
+        run: |
+          if [ -n "${{ inputs.tag }}" ]; then
+            echo "tag=${{ inputs.tag }}" >> "$GITHUB_OUTPUT"
+          else
+            echo "tag=${GITHUB_REF_NAME}" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Set package version from tag
+        shell: bash
+        run: node scripts/set-version.mjs --tag "${{ steps.tag.outputs.tag }}"
+
+      - name: Typecheck
+        run: pnpm typecheck
+
+      - name: Lint
+        run: pnpm lint
+
+      - name: Test (Linux)
+        if: matrix.platform == 'linux'
+        run: xvfb-run --auto-servernum pnpm test
+
+      - name: Test (${{ matrix.platform }})
+        if: matrix.platform != 'linux'
+        run: pnpm test
+
+      - name: Build renderer/main/preload
+        run: pnpm --filter @worth/electron build
+
+      - name: Package and publish
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # Never attempt notarization — we do not have an Apple Developer ID.
+          CSC_IDENTITY_AUTO_DISCOVERY: "false"
+        run: pnpm --filter @worth/electron exec electron-builder --publish always

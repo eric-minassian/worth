@@ -139,8 +139,15 @@ Small-to-medium items that have been noted during prior work but not done. Good 
 - **Projection-schema migrations.** When a projection table's schema needs to change, the canonical path is: bump migrations, run `rebuildProjections` at startup (or on first launch after the migration lands). Event log is untouched.
 - **Format pass.** `pnpm format` hasn't been enforced; minor churn expected the first time it runs against everything.
 - **Logging.** No structured logger yet. Worth wiring up once we have anything that fails silently (sync loops, scheduled jobs).
-- **CI.** No CI configured. Minimum: typecheck, lint, test on push; build main on release. Consider GitHub Actions runners for macOS (native module build). Tests must run on the same OS the app ships on for the native-module ABI to match, or use Docker.
-- **Code signing + notarization.** Required for macOS distribution. Electron-builder handles the mechanics.
+- **Code signing + notarization.** Required for macOS distribution. Without an Apple Developer Program membership, macOS builds are unsigned — the in-app updater cannot do in-place install on macOS and falls back to opening the GitHub release page (see below). Windows is unsigned too; SmartScreen warns on first install.
+
+### In-app updates (shipped)
+
+- `electron-updater` wired in `apps/electron/src/main/updater.ts`. Win/Linux get full auto-download + auto-install via GitHub Releases. macOS skips electron-updater entirely: it hits the GitHub Releases API directly, compares versions, and opens the release page in a browser for a manual DMG swap (unsigned builds can't pass Squirrel.Mac's signature check).
+- Two channels: **stable** (`latest.yml`, published by `.github/workflows/release.yml` on `v*` tag) and **nightly** (`nightly.yml`, published by `.github/workflows/nightly.yml` on every push to `main`). Channel preference persists in `meta.update_channel`.
+- Nightly version scheme: `X.Y.Z-nightly.<YYYYMMDDHHmm>.<shortsha>` — computed by `scripts/set-version.mjs --nightly`. The fixed-width timestamp is what makes lexicographic prerelease compare correct, so a newer nightly always sorts above an older one.
+- `.github/workflows/ci.yml` runs typecheck + lint + test on PRs and pushes to `main` (Ubuntu runner with `xvfb-run` for the Electron-hosted Vitest).
+- Known followups: code-signing on Windows (Azure Trusted Signing is ~$10/mo and covers SmartScreen); Mac notarization blocked on Apple Developer Program.
 
 ## 6. Gotchas
 

@@ -10,6 +10,7 @@ import {
 } from "@worth/core"
 import type { CommandKind, InputOf, OutputOf } from "@worth/ipc"
 import { ExportFile } from "@worth/sync"
+import { Updater } from "./updater"
 
 /**
  * Maps each command kind to an effect that produces its output from its input.
@@ -20,7 +21,12 @@ export type CommandHandler<K extends CommandKind> = (
 ) => Effect.Effect<
   OutputOf<K>,
   unknown,
-  AccountService | CategoryService | ImportService | SystemService | TransactionService
+  | AccountService
+  | CategoryService
+  | ImportService
+  | SystemService
+  | TransactionService
+  | Updater
 >
 
 export type Handlers = { readonly [K in CommandKind]: CommandHandler<K> }
@@ -177,5 +183,41 @@ export const handlers: Handlers = {
     Effect.gen(function* () {
       const svc = yield* SystemService
       return yield* svc.rebuildProjections
+    }),
+
+  "updater.getState": () =>
+    Effect.gen(function* () {
+      const updater = yield* Updater
+      return updater.getState()
+    }),
+
+  "updater.checkForUpdates": () =>
+    Effect.gen(function* () {
+      const updater = yield* Updater
+      return yield* Effect.promise(() => updater.checkForUpdates())
+    }),
+
+  "updater.downloadUpdate": () =>
+    Effect.gen(function* () {
+      const updater = yield* Updater
+      return yield* Effect.promise(() => updater.downloadUpdate())
+    }),
+
+  "updater.quitAndInstall": () =>
+    Effect.gen(function* () {
+      const updater = yield* Updater
+      return { ok: updater.quitAndInstall() }
+    }),
+
+  "updater.setChannel": (input) =>
+    Effect.gen(function* () {
+      const updater = yield* Updater
+      return yield* Effect.promise(() => updater.setChannel(input.channel))
+    }),
+
+  "updater.openReleasePage": () =>
+    Effect.gen(function* () {
+      const updater = yield* Updater
+      return { ok: yield* Effect.promise(() => updater.openReleasePage()) }
     }),
 }

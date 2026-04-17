@@ -204,7 +204,7 @@ export const TransactionsPage = () => {
           <TableHeader className="sticky top-0 z-[1] bg-card shadow-[inset_0_-1px_0] shadow-border">
             <TableRow>
               <TableHead>Date</TableHead>
-              <TableHead>Payee</TableHead>
+              <TableHead className="w-full">Payee</TableHead>
               <TableHead>Account</TableHead>
               <TableHead>Category</TableHead>
               <TableHead className="text-right">Amount</TableHead>
@@ -218,11 +218,16 @@ export const TransactionsPage = () => {
                   <TableCell className="text-xs text-muted-foreground tabular-nums">
                     {formatDate(txn.postedAt)}
                   </TableCell>
-                  <TableCell className="font-medium">
+                  <TableCell className="max-w-0 font-medium">
                     <div className="flex flex-col">
-                      <span>{txn.payee}</span>
+                      <span className="truncate" title={txn.payee}>
+                        {txn.payee}
+                      </span>
                       {txn.memo && (
-                        <span className="text-xs text-muted-foreground">
+                        <span
+                          className="truncate text-xs text-muted-foreground"
+                          title={txn.memo}
+                        >
                           {txn.memo}
                         </span>
                       )}

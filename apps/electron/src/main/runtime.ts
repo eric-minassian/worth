@@ -4,6 +4,7 @@ import {
   AccountServiceLive,
   CategoryServiceLive,
   EventLogLive,
+  ImportServiceLive,
   TransactionServiceLive,
 } from "@worth/core"
 import { Db, DbConfigLive, DbLive, schema } from "@worth/db"
@@ -47,6 +48,7 @@ export const makeAppLayer = (dbFilename: string) => {
     base,
     AccountServiceLive.pipe(Layer.provide(base)),
     CategoryServiceLive.pipe(Layer.provide(base)),
+    ImportServiceLive.pipe(Layer.provide(base)),
     TransactionServiceLive.pipe(Layer.provide(base)),
   )
 }

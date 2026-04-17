@@ -1,9 +1,17 @@
-export { cn } from "./cn"
-export { Button } from "./button"
-export { Input } from "./input"
-export { Label } from "./label"
-export { Select } from "./select"
-export { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "./card"
+export { cn } from "./lib/utils"
+
+export { Button, buttonVariants } from "./components/ui/button"
+export { Input } from "./components/ui/input"
+export { Label } from "./components/ui/label"
+export {
+  Card,
+  CardAction,
+  CardContent,
+  CardDescription,
+  CardFooter,
+  CardHeader,
+  CardTitle,
+} from "./components/ui/card"
 export {
   Dialog,
   DialogClose,
@@ -15,5 +23,26 @@ export {
   DialogPortal,
   DialogTitle,
   DialogTrigger,
-} from "./dialog"
-export { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "./table"
+} from "./components/ui/dialog"
+export {
+  Select,
+  SelectContent,
+  SelectGroup,
+  SelectItem,
+  SelectLabel,
+  SelectScrollDownButton,
+  SelectScrollUpButton,
+  SelectSeparator,
+  SelectTrigger,
+  SelectValue,
+} from "./components/ui/select"
+export {
+  Table,
+  TableBody,
+  TableCaption,
+  TableCell,
+  TableFooter,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "./components/ui/table"

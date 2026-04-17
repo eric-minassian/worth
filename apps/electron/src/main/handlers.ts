@@ -2,6 +2,7 @@ import { Effect } from "effect"
 import {
   AccountService,
   CategoryService,
+  ImportService,
   TransactionService,
 } from "@worth/core"
 import type { CommandKind, InputOf, OutputOf } from "@worth/ipc"
@@ -15,7 +16,7 @@ export type CommandHandler<K extends CommandKind> = (
 ) => Effect.Effect<
   OutputOf<K>,
   unknown,
-  AccountService | CategoryService | TransactionService
+  AccountService | CategoryService | ImportService | TransactionService
 >
 
 export type Handlers = { readonly [K in CommandKind]: CommandHandler<K> }
@@ -91,5 +92,17 @@ export const handlers: Handlers = {
     Effect.gen(function* () {
       const svc = yield* TransactionService
       yield* svc.delete(input.id)
+    }),
+
+  "transaction.import.preview": (input) =>
+    Effect.gen(function* () {
+      const svc = yield* ImportService
+      return yield* svc.preview(input)
+    }),
+
+  "transaction.import.commit": (input) =>
+    Effect.gen(function* () {
+      const svc = yield* ImportService
+      return yield* svc.commit(input)
     }),
 }

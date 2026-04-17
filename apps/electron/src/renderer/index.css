@@ -1,4 +1,6 @@
-@import "tailwindcss";
+@import "@worth/ui/styles.css";
+
+@source "../../../../packages/ui/src";
 
 html,
 body,
@@ -7,7 +9,6 @@ body,
 }
 
 body {
-  @apply bg-neutral-950 text-neutral-100 antialiased;
   font-family:
     ui-sans-serif,
     system-ui,
@@ -15,4 +16,5 @@ body {
     "Segoe UI",
     Roboto,
     sans-serif;
+  -webkit-font-smoothing: antialiased;
 }

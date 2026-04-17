@@ -21,8 +21,8 @@ const navItems: readonly NavItem[] = [
 ]
 
 export const Layout = ({ children }: LayoutProps) => (
-  <div className="flex h-full">
-    <aside className="flex w-56 shrink-0 flex-col gap-1 border-r border-neutral-900 bg-neutral-950 px-3 py-5">
+  <div className="flex h-full bg-background text-foreground">
+    <aside className="flex w-56 shrink-0 flex-col gap-1 border-r border-sidebar-border bg-sidebar px-3 py-5 text-sidebar-foreground">
       <div className="px-3 pb-5">
         <h1 className="text-xl font-semibold tracking-tight">Worth</h1>
       </div>
@@ -32,16 +32,14 @@ export const Layout = ({ children }: LayoutProps) => (
             key={to}
             to={to}
             activeOptions={{ exact: to === "/" }}
-            className="group flex items-center gap-2 rounded-md px-3 py-2 text-sm text-neutral-400 transition-colors hover:bg-neutral-900 hover:text-neutral-100 data-[status=active]:bg-neutral-900 data-[status=active]:text-neutral-100"
-          >
-            {({ isActive }) => (
-              <>
-                <Icon
-                  className={cn("h-4 w-4", isActive ? "text-neutral-100" : "text-neutral-500")}
-                />
-                {label}
-              </>
+            className={cn(
+              "group flex items-center gap-2 rounded-md px-3 py-2 text-sm transition-colors",
+              "text-sidebar-foreground/70 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground",
+              "data-[status=active]:bg-sidebar-accent data-[status=active]:text-sidebar-accent-foreground",
             )}
+          >
+            <Icon />
+            {label}
           </Link>
         ))}
       </nav>

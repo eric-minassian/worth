@@ -18,26 +18,26 @@ export const Dashboard = () => {
     <div className="mx-auto flex max-w-5xl flex-col gap-6 px-8 py-10">
       <header>
         <h2 className="text-2xl font-semibold tracking-tight">Dashboard</h2>
-        <p className="mt-1 text-sm text-neutral-400">Your money at a glance.</p>
+        <p className="mt-1 text-sm text-muted-foreground">Your money at a glance.</p>
       </header>
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
         <Card>
           <CardHeader>
             <CardDescription>Accounts</CardDescription>
-            <CardTitle>{accounts.data?.length ?? "—"}</CardTitle>
+            <CardTitle className="text-2xl">{accounts.data?.length ?? "—"}</CardTitle>
           </CardHeader>
         </Card>
         <Card>
           <CardHeader>
             <CardDescription>Recent transactions</CardDescription>
-            <CardTitle>{recent.data?.length ?? "—"}</CardTitle>
+            <CardTitle className="text-2xl">{recent.data?.length ?? "—"}</CardTitle>
           </CardHeader>
         </Card>
         <Card>
           <CardHeader>
             <CardDescription>Status</CardDescription>
-            <CardTitle className="text-base font-medium text-emerald-400">Local only</CardTitle>
+            <CardTitle className="text-base font-medium">Local only</CardTitle>
           </CardHeader>
         </Card>
       </div>
@@ -48,13 +48,15 @@ export const Dashboard = () => {
         </CardHeader>
         <CardContent>
           {recent.data && recent.data.length > 0 ? (
-            <ul className="divide-y divide-neutral-800">
+            <ul className="flex flex-col divide-y divide-border">
               {recent.data.map((txn) => (
                 <li key={txn.id} className="flex items-center justify-between py-2 text-sm">
                   <span>{txn.payee}</span>
                   <span
                     className={
-                      txn.amount.minor < 0n ? "text-red-400" : "text-emerald-400"
+                      txn.amount.minor < 0n
+                        ? "text-destructive"
+                        : "text-emerald-500 dark:text-emerald-400"
                     }
                   >
                     {formatMoney(txn.amount)}
@@ -63,7 +65,7 @@ export const Dashboard = () => {
               ))}
             </ul>
           ) : (
-            <p className="text-sm text-neutral-500">No transactions yet.</p>
+            <p className="text-sm text-muted-foreground">No transactions yet.</p>
           )}
         </CardContent>
       </Card>

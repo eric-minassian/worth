@@ -140,6 +140,39 @@ export const TransactionDeleteCommand = defineCommand(
   Schema.Void,
 )
 
+// -- Import commands --------------------------------------------------------
+
+const ColumnRole = Schema.Literals(["date", "payee", "amount", "memo", "skip"])
+const ColumnMapping = Schema.Record(Schema.String, ColumnRole)
+
+export const ImportPreviewCommand = defineCommand(
+  "transaction.import.preview",
+  Schema.Struct({ text: Schema.String }),
+  Schema.Struct({
+    headers: Schema.Array(Schema.String),
+    sampleRows: Schema.Array(Schema.Array(Schema.String)),
+    totalRows: Schema.Number,
+    suggestedMapping: ColumnMapping,
+  }),
+)
+
+export const ImportCommitCommand = defineCommand(
+  "transaction.import.commit",
+  Schema.Struct({
+    accountId: AccountId,
+    text: Schema.String,
+    mapping: ColumnMapping,
+  }),
+  Schema.Struct({
+    total: Schema.Number,
+    imported: Schema.Number,
+    duplicates: Schema.Number,
+    errors: Schema.Array(
+      Schema.Struct({ rowIndex: Schema.Number, message: Schema.String }),
+    ),
+  }),
+)
+
 // -- Registry ---------------------------------------------------------------
 
 export const Commands = {
@@ -155,6 +188,8 @@ export const Commands = {
   "transaction.categorize": TransactionCategorizeCommand,
   "transaction.edit": TransactionEditCommand,
   "transaction.delete": TransactionDeleteCommand,
+  "transaction.import.preview": ImportPreviewCommand,
+  "transaction.import.commit": ImportCommitCommand,
 } as const
 
 export type Commands = typeof Commands

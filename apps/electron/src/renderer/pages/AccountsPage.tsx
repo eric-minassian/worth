@@ -14,6 +14,10 @@ import {
   Input,
   Label,
   Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
   Table,
   TableBody,
   TableCell,
@@ -42,21 +46,21 @@ export const AccountsPage = () => {
       <header className="flex items-center justify-between">
         <div>
           <h2 className="text-2xl font-semibold tracking-tight">Accounts</h2>
-          <p className="mt-1 text-sm text-neutral-400">
+          <p className="mt-1 text-sm text-muted-foreground">
             Every bucket of money you want to track — checking, savings, credit, cash.
           </p>
         </div>
         <Dialog open={open} onOpenChange={setOpen}>
           <DialogTrigger asChild>
             <Button>
-              <Plus className="h-4 w-4" /> Add account
+              <Plus /> Add account
             </Button>
           </DialogTrigger>
           <AccountDialog onClose={() => setOpen(false)} />
         </Dialog>
       </header>
 
-      <div className="rounded-lg border border-neutral-800 bg-neutral-950">
+      <div className="rounded-lg border bg-card">
         <Table>
           <TableHeader>
             <TableRow>
@@ -71,16 +75,18 @@ export const AccountsPage = () => {
               accounts.data.map((account) => (
                 <TableRow key={account.id}>
                   <TableCell className="font-medium">{account.name}</TableCell>
-                  <TableCell className="capitalize text-neutral-400">{account.type}</TableCell>
-                  <TableCell className="text-neutral-400">{account.currency}</TableCell>
-                  <TableCell className="text-neutral-400">
+                  <TableCell className="capitalize text-muted-foreground">
+                    {account.type}
+                  </TableCell>
+                  <TableCell className="text-muted-foreground">{account.currency}</TableCell>
+                  <TableCell className="text-muted-foreground">
                     {formatDate(account.createdAt)}
                   </TableCell>
                 </TableRow>
               ))
             ) : (
               <TableRow>
-                <TableCell colSpan={4} className="py-10 text-center text-sm text-neutral-500">
+                <TableCell colSpan={4} className="py-10 text-center text-sm text-muted-foreground">
                   No accounts yet. Create one to get started.
                 </TableCell>
               </TableRow>
@@ -148,12 +154,17 @@ const AccountDialog = ({ onClose }: AccountDialogProps) => {
 
         <div className="flex flex-col gap-2">
           <Label htmlFor="type">Type</Label>
-          <Select id="type" value={type} onChange={(e) => setType(e.target.value as AccountType)}>
-            {accountTypes.map((t) => (
-              <option key={t.value} value={t.value}>
-                {t.label}
-              </option>
-            ))}
+          <Select value={type} onValueChange={(v) => setType(v as AccountType)}>
+            <SelectTrigger id="type">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {accountTypes.map((t) => (
+                <SelectItem key={t.value} value={t.value}>
+                  {t.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
           </Select>
         </div>
 
@@ -167,7 +178,7 @@ const AccountDialog = ({ onClose }: AccountDialogProps) => {
           />
         </div>
 
-        {error && <p className="text-sm text-red-400">{error}</p>}
+        {error && <p className="text-sm text-destructive">{error}</p>}
 
         <DialogFooter>
           <Button type="button" variant="secondary" onClick={onClose}>

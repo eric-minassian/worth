@@ -1,4 +1,5 @@
 export * from "./EventLog"
 export * from "./services/AccountService"
 export * from "./services/CategoryService"
+export * from "./services/ImportService"
 export * from "./services/TransactionService"

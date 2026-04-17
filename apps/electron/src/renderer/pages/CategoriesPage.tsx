@@ -14,6 +14,10 @@ import {
   Input,
   Label,
   Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
   Table,
   TableBody,
   TableCell,
@@ -24,6 +28,8 @@ import {
 import { callCommand, RpcError } from "../rpc"
 import { categoriesQuery, invalidationKeys } from "../lib/queries"
 
+const NO_PARENT = "__none__"
+
 export const CategoriesPage = () => {
   const categories = useQuery(categoriesQuery)
   const [open, setOpen] = useState(false)
@@ -33,24 +39,21 @@ export const CategoriesPage = () => {
       <header className="flex items-center justify-between">
         <div>
           <h2 className="text-2xl font-semibold tracking-tight">Categories</h2>
-          <p className="mt-1 text-sm text-neutral-400">
+          <p className="mt-1 text-sm text-muted-foreground">
             Tags you attach to transactions to track where your money goes.
           </p>
         </div>
         <Dialog open={open} onOpenChange={setOpen}>
           <DialogTrigger asChild>
             <Button>
-              <Plus className="h-4 w-4" /> Add category
+              <Plus /> Add category
             </Button>
           </DialogTrigger>
-          <CategoryDialog
-            existing={categories.data ?? []}
-            onClose={() => setOpen(false)}
-          />
+          <CategoryDialog existing={categories.data ?? []} onClose={() => setOpen(false)} />
         </Dialog>
       </header>
 
-      <div className="rounded-lg border border-neutral-800 bg-neutral-950">
+      <div className="rounded-lg border bg-card">
         <Table>
           <TableHeader>
             <TableRow>
@@ -66,18 +69,18 @@ export const CategoriesPage = () => {
                 return (
                   <TableRow key={c.id}>
                     <TableCell className="font-medium">{c.name}</TableCell>
-                    <TableCell className="text-neutral-400">{parent?.name ?? "—"}</TableCell>
+                    <TableCell className="text-muted-foreground">{parent?.name ?? "—"}</TableCell>
                     <TableCell>
                       {c.color ? (
-                        <span className="inline-flex items-center gap-2 text-neutral-400">
+                        <span className="inline-flex items-center gap-2 text-muted-foreground">
                           <span
-                            className="h-3 w-3 rounded-full"
+                            className="size-3 rounded-full"
                             style={{ backgroundColor: c.color }}
                           />
                           {c.color}
                         </span>
                       ) : (
-                        <span className="text-neutral-500">—</span>
+                        <span className="text-muted-foreground">—</span>
                       )}
                     </TableCell>
                   </TableRow>
@@ -85,7 +88,7 @@ export const CategoriesPage = () => {
               })
             ) : (
               <TableRow>
-                <TableCell colSpan={3} className="py-10 text-center text-sm text-neutral-500">
+                <TableCell colSpan={3} className="py-10 text-center text-sm text-muted-foreground">
                   No categories yet.
                 </TableCell>
               </TableRow>
@@ -105,7 +108,7 @@ interface CategoryDialogProps {
 const CategoryDialog = ({ existing, onClose }: CategoryDialogProps) => {
   const qc = useQueryClient()
   const [name, setName] = useState("")
-  const [parentId, setParentId] = useState<CategoryId | "">("")
+  const [parentId, setParentId] = useState<string>(NO_PARENT)
   const [color, setColor] = useState("")
   const [error, setError] = useState<string | null>(null)
 
@@ -113,13 +116,13 @@ const CategoryDialog = ({ existing, onClose }: CategoryDialogProps) => {
     mutationFn: () =>
       callCommand("category.create", {
         name: name.trim(),
-        parentId: parentId === "" ? null : parentId,
+        parentId: parentId === NO_PARENT ? null : (parentId as CategoryId),
         color: color.trim() === "" ? null : color.trim(),
       }),
     onSuccess: async () => {
       await qc.invalidateQueries({ queryKey: invalidationKeys.categories })
       setName("")
-      setParentId("")
+      setParentId(NO_PARENT)
       setColor("")
       onClose()
     },
@@ -159,17 +162,18 @@ const CategoryDialog = ({ existing, onClose }: CategoryDialogProps) => {
 
         <div className="flex flex-col gap-2">
           <Label htmlFor="cat-parent">Parent</Label>
-          <Select
-            id="cat-parent"
-            value={parentId}
-            onChange={(e) => setParentId(e.target.value as CategoryId | "")}
-          >
-            <option value="">None</option>
-            {existing.map((p) => (
-              <option key={p.id} value={p.id}>
-                {p.name}
-              </option>
-            ))}
+          <Select value={parentId} onValueChange={setParentId}>
+            <SelectTrigger id="cat-parent">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value={NO_PARENT}>None</SelectItem>
+              {existing.map((p) => (
+                <SelectItem key={p.id} value={p.id}>
+                  {p.name}
+                </SelectItem>
+              ))}
+            </SelectContent>
           </Select>
         </div>
 
@@ -183,7 +187,7 @@ const CategoryDialog = ({ existing, onClose }: CategoryDialogProps) => {
           />
         </div>
 
-        {error && <p className="text-sm text-red-400">{error}</p>}
+        {error && <p className="text-sm text-destructive">{error}</p>}
 
         <DialogFooter>
           <Button type="button" variant="secondary" onClick={onClose}>

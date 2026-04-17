@@ -1,9 +1,29 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
-import { FileUp, Plus } from "lucide-react"
+import {
+  ArrowDownRight,
+  ArrowUpRight,
+  FileUp,
+  MoreHorizontal,
+  Plus,
+  Search,
+  Trash2,
+  X,
+} from "lucide-react"
 import { useMemo, useState, type FormEvent } from "react"
+
 import type { AccountId, CategoryId, TransactionId } from "@worth/domain"
 import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  Badge,
   Button,
+  buttonVariants,
   Dialog,
   DialogContent,
   DialogDescription,
@@ -11,6 +31,12 @@ import {
   DialogHeader,
   DialogTitle,
   DialogTrigger,
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
   Input,
   Label,
   Select,
@@ -24,9 +50,11 @@ import {
   TableHead,
   TableHeader,
   TableRow,
+  toast,
 } from "@worth/ui"
-import { callCommand, RpcError } from "../rpc"
+import { callCommand, formatRpcError } from "../rpc"
 import { ImportDialog } from "./ImportDialog"
+import { PageActions } from "../Layout"
 import {
   accountsQuery,
   categoriesQuery,
@@ -34,6 +62,7 @@ import {
   transactionsQuery,
 } from "../lib/queries"
 import {
+  amountClass,
   formatDate,
   formatMoney,
   fromDateInput,
@@ -41,11 +70,13 @@ import {
   toDateInput,
 } from "../lib/format"
 
-const ALL_ACCOUNTS = "__all__"
+const ALL_ACCOUNTS = "__all_accounts__"
+const ALL_CATEGORIES = "__all_categories__"
 const UNCATEGORIZED = "__uncategorized__"
 
 export const TransactionsPage = () => {
   const [accountFilter, setAccountFilter] = useState<string>(ALL_ACCOUNTS)
+  const [categoryFilter, setCategoryFilter] = useState<string>(ALL_CATEGORIES)
   const [search, setSearch] = useState("")
   const [open, setOpen] = useState(false)
   const [importOpen, setImportOpen] = useState(false)
@@ -54,9 +85,10 @@ export const TransactionsPage = () => {
   const categories = useQuery(categoriesQuery)
   const transactions = useQuery(
     transactionsQuery({
-      accountId: accountFilter === ALL_ACCOUNTS ? undefined : (accountFilter as AccountId),
+      accountId:
+        accountFilter === ALL_ACCOUNTS ? undefined : (accountFilter as AccountId),
       search: search.trim() === "" ? undefined : search.trim(),
-      limit: 500,
+      limit: 1000,
       order: "posted-desc",
     }),
   )
@@ -71,113 +103,165 @@ export const TransactionsPage = () => {
     [accounts.data],
   )
 
+  const filteredByCategory = useMemo(() => {
+    const data = transactions.data ?? []
+    if (categoryFilter === ALL_CATEGORIES) return data
+    if (categoryFilter === UNCATEGORIZED)
+      return data.filter((t) => t.categoryId === null)
+    return data.filter((t) => t.categoryId === categoryFilter)
+  }, [transactions.data, categoryFilter])
+
   const hasAccounts = (accounts.data?.length ?? 0) > 0
+  const hasFilters =
+    search.trim() !== "" ||
+    accountFilter !== ALL_ACCOUNTS ||
+    categoryFilter !== ALL_CATEGORIES
 
   return (
-    <div className="mx-auto flex max-w-6xl flex-col gap-6 px-8 py-10">
-      <header className="flex items-center justify-between">
-        <div>
-          <h2 className="text-2xl font-semibold tracking-tight">Transactions</h2>
-          <p className="mt-1 text-sm text-muted-foreground">
-            Every entry in your ledger. Add manually or import a bank CSV.
-          </p>
-        </div>
-        <div className="flex items-center gap-2">
-          <Dialog open={importOpen} onOpenChange={setImportOpen}>
-            <DialogTrigger asChild>
-              <Button variant="secondary" disabled={!hasAccounts}>
-                <FileUp /> Import CSV
-              </Button>
-            </DialogTrigger>
-            <ImportDialog
-              accounts={accounts.data ?? []}
-              onClose={() => setImportOpen(false)}
-            />
-          </Dialog>
-          <Dialog open={open} onOpenChange={setOpen}>
-            <DialogTrigger asChild>
-              <Button disabled={!hasAccounts}>
-                <Plus /> Add transaction
-              </Button>
-            </DialogTrigger>
-            <TransactionDialog
-              accounts={accounts.data ?? []}
-              onClose={() => setOpen(false)}
-            />
-          </Dialog>
-        </div>
-      </header>
+    <div className="mx-auto flex max-w-7xl flex-col gap-5 px-8 py-6">
+      <PageActions>
+        <Dialog open={importOpen} onOpenChange={setImportOpen}>
+          <DialogTrigger asChild>
+            <Button variant="secondary" size="sm" disabled={!hasAccounts}>
+              <FileUp /> Import CSV
+            </Button>
+          </DialogTrigger>
+          <ImportDialog
+            accounts={accounts.data ?? []}
+            onClose={() => setImportOpen(false)}
+          />
+        </Dialog>
+        <Dialog open={open} onOpenChange={setOpen}>
+          <DialogTrigger asChild>
+            <Button size="sm" disabled={!hasAccounts}>
+              <Plus /> Add transaction
+            </Button>
+          </DialogTrigger>
+          <TransactionDialog
+            accounts={accounts.data ?? []}
+            onClose={() => setOpen(false)}
+          />
+        </Dialog>
+      </PageActions>
 
-      <div className="flex flex-wrap items-end gap-4">
-        <div className="flex flex-1 flex-col gap-2">
-          <Label htmlFor="search">Search</Label>
+      <div className="flex flex-wrap items-center gap-2 rounded-lg border bg-card p-2">
+        <div className="relative flex-1 min-w-[180px]">
+          <Search className="pointer-events-none absolute top-1/2 left-2 size-3 -translate-y-1/2 text-muted-foreground" />
           <Input
-            id="search"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            placeholder="Payee or memo…"
+            placeholder="Search payee or memo…"
+            className="h-7 pl-7"
           />
         </div>
-        <div className="flex w-56 flex-col gap-2">
-          <Label htmlFor="account-filter">Account</Label>
-          <Select value={accountFilter} onValueChange={setAccountFilter}>
-            <SelectTrigger id="account-filter">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value={ALL_ACCOUNTS}>All accounts</SelectItem>
-              {accounts.data?.map((a) => (
-                <SelectItem key={a.id} value={a.id}>
-                  {a.name}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
+        <Select value={accountFilter} onValueChange={setAccountFilter}>
+          <SelectTrigger className="h-7 w-[180px]">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value={ALL_ACCOUNTS}>All accounts</SelectItem>
+            {accounts.data?.map((a) => (
+              <SelectItem key={a.id} value={a.id}>
+                {a.name}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        <Select value={categoryFilter} onValueChange={setCategoryFilter}>
+          <SelectTrigger className="h-7 w-[180px]">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value={ALL_CATEGORIES}>All categories</SelectItem>
+            <SelectItem value={UNCATEGORIZED}>Uncategorized</SelectItem>
+            {categories.data?.map((c) => (
+              <SelectItem key={c.id} value={c.id}>
+                {c.name}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        {hasFilters && (
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => {
+              setSearch("")
+              setAccountFilter(ALL_ACCOUNTS)
+              setCategoryFilter(ALL_CATEGORIES)
+            }}
+          >
+            <X /> Reset
+          </Button>
+        )}
+        <span className="ml-auto text-xs text-muted-foreground">
+          {filteredByCategory.length} of {transactions.data?.length ?? 0}
+        </span>
       </div>
 
       <div className="rounded-lg border bg-card">
         <Table>
-          <TableHeader>
+          <TableHeader className="sticky top-0 z-[1] bg-card shadow-[inset_0_-1px_0] shadow-border">
             <TableRow>
               <TableHead>Date</TableHead>
               <TableHead>Payee</TableHead>
               <TableHead>Account</TableHead>
               <TableHead>Category</TableHead>
               <TableHead className="text-right">Amount</TableHead>
+              <TableHead className="w-9" />
             </TableRow>
           </TableHeader>
           <TableBody>
-            {transactions.data && transactions.data.length > 0 ? (
-              transactions.data.map((txn) => (
-                <TableRow key={txn.id}>
-                  <TableCell className="text-muted-foreground">
+            {filteredByCategory.length > 0 ? (
+              filteredByCategory.map((txn) => (
+                <TableRow key={txn.id} className="group">
+                  <TableCell className="text-xs text-muted-foreground tabular-nums">
                     {formatDate(txn.postedAt)}
                   </TableCell>
-                  <TableCell className="font-medium">{txn.payee}</TableCell>
-                  <TableCell className="text-muted-foreground">
-                    {accountById.get(txn.accountId)?.name ?? "—"}
+                  <TableCell className="font-medium">
+                    <div className="flex flex-col">
+                      <span>{txn.payee}</span>
+                      {txn.memo && (
+                        <span className="text-xs text-muted-foreground">
+                          {txn.memo}
+                        </span>
+                      )}
+                    </div>
+                  </TableCell>
+                  <TableCell>
+                    <Badge variant="outline" className="font-normal">
+                      {accountById.get(txn.accountId)?.name ?? "—"}
+                    </Badge>
                   </TableCell>
                   <TableCell>
                     <CategoryPicker
                       txnId={txn.id}
                       value={txn.categoryId}
                       categories={categories.data ?? []}
+                      categoryById={categoryById}
                       accountId={txn.accountId}
                     />
                   </TableCell>
-                  <TableCell
-                    className={cnAmount(txn.amount.minor)}
-                  >
-                    {formatMoney(txn.amount)}
+                  <TableCell className={amountClass(txn.amount.minor)}>
+                    <span className="inline-flex items-center justify-end gap-1">
+                      {txn.amount.minor < 0n ? (
+                        <ArrowDownRight className="size-3" />
+                      ) : (
+                        <ArrowUpRight className="size-3" />
+                      )}
+                      {formatMoney(txn.amount)}
+                    </span>
+                  </TableCell>
+                  <TableCell>
+                    <TransactionRowMenu txnId={txn.id} payee={txn.payee} />
                   </TableCell>
                 </TableRow>
               ))
             ) : (
               <TableRow>
                 <TableCell
-                  colSpan={5}
-                  className="py-10 text-center text-sm text-muted-foreground"
+                  colSpan={6}
+                  className="py-12 text-center text-xs text-muted-foreground"
                 >
                   {hasAccounts
                     ? "No transactions match. Add one or adjust filters."
@@ -188,25 +272,28 @@ export const TransactionsPage = () => {
           </TableBody>
         </Table>
       </div>
-
-      {categoryById.size === 0 && categories.data ? null : null}
     </div>
   )
 }
-
-const cnAmount = (minor: bigint): string =>
-  minor < 0n
-    ? "text-right font-medium text-destructive"
-    : "text-right font-medium text-emerald-500 dark:text-emerald-400"
 
 interface CategoryPickerProps {
   readonly txnId: TransactionId
   readonly value: CategoryId | null
   readonly categories: readonly { id: CategoryId; name: string }[]
+  readonly categoryById: ReadonlyMap<
+    CategoryId,
+    { name: string; color: string | null }
+  >
   readonly accountId: AccountId
 }
 
-const CategoryPicker = ({ txnId, value, categories, accountId }: CategoryPickerProps) => {
+const CategoryPicker = ({
+  txnId,
+  value,
+  categories,
+  categoryById,
+  accountId,
+}: CategoryPickerProps) => {
   const qc = useQueryClient()
   const mutation = useMutation({
     mutationFn: (categoryId: CategoryId | null) =>
@@ -217,16 +304,33 @@ const CategoryPicker = ({ txnId, value, categories, accountId }: CategoryPickerP
         queryKey: invalidationKeys.transactionsForAccount(accountId),
       })
     },
+    onError: (e) => toast.error(formatRpcError(e)),
   })
+
+  const current = value ? categoryById.get(value) : null
 
   return (
     <Select
       value={value ?? UNCATEGORIZED}
       disabled={mutation.isPending}
-      onValueChange={(v) => mutation.mutate(v === UNCATEGORIZED ? null : (v as CategoryId))}
+      onValueChange={(v) =>
+        mutation.mutate(v === UNCATEGORIZED ? null : (v as CategoryId))
+      }
     >
-      <SelectTrigger>
-        <SelectValue />
+      <SelectTrigger className="h-7 w-[160px] gap-1.5">
+        {current ? (
+          <span className="flex items-center gap-2">
+            {current.color && (
+              <span
+                className="size-2 shrink-0 rounded-full"
+                style={{ backgroundColor: current.color }}
+              />
+            )}
+            <span className="truncate">{current.name}</span>
+          </span>
+        ) : (
+          <span className="text-muted-foreground">Uncategorized</span>
+        )}
       </SelectTrigger>
       <SelectContent>
         <SelectItem value={UNCATEGORIZED}>Uncategorized</SelectItem>
@@ -237,6 +341,69 @@ const CategoryPicker = ({ txnId, value, categories, accountId }: CategoryPickerP
         ))}
       </SelectContent>
     </Select>
+  )
+}
+
+const TransactionRowMenu = ({
+  txnId,
+  payee,
+}: {
+  readonly txnId: TransactionId
+  readonly payee: string
+}) => {
+  const qc = useQueryClient()
+  const [confirmOpen, setConfirmOpen] = useState(false)
+  const deleteMutation = useMutation({
+    mutationFn: () => callCommand("transaction.delete", { id: txnId }),
+    onSuccess: async () => {
+      await qc.invalidateQueries({ queryKey: invalidationKeys.transactions })
+      toast.success("Transaction deleted")
+    },
+    onError: (e) => toast.error(formatRpcError(e)),
+  })
+
+  return (
+    <>
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <Button
+            variant="ghost"
+            size="icon-sm"
+            className="opacity-0 group-hover:opacity-100 data-[state=open]:opacity-100"
+          >
+            <MoreHorizontal />
+          </Button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="end">
+          <DropdownMenuLabel className="truncate max-w-[200px]">
+            {payee}
+          </DropdownMenuLabel>
+          <DropdownMenuSeparator />
+          <DropdownMenuItem onSelect={() => setConfirmOpen(true)}>
+            <Trash2 /> Delete
+          </DropdownMenuItem>
+        </DropdownMenuContent>
+      </DropdownMenu>
+      <AlertDialog open={confirmOpen} onOpenChange={setConfirmOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete transaction?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This removes “{payee}” from your ledger. Cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              className={buttonVariants({ variant: "destructive" })}
+              onClick={() => deleteMutation.mutate()}
+            >
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    </>
   )
 }
 
@@ -275,12 +442,13 @@ const TransactionDialog = ({ accounts, onClose }: TransactionDialogProps) => {
     },
     onSuccess: async () => {
       await qc.invalidateQueries({ queryKey: invalidationKeys.transactions })
+      toast.success(`Added ${payee.trim()}`)
       setAmountText("")
       setPayee("")
       setMemo("")
       onClose()
     },
-    onError: (e) => setError(e instanceof RpcError ? `${e.tag}: ${e.message}` : e.message),
+    onError: (e) => setError(formatRpcError(e)),
   })
 
   const onSubmit = (e: FormEvent) => {
@@ -373,7 +541,7 @@ const TransactionDialog = ({ accounts, onClose }: TransactionDialogProps) => {
           />
         </div>
 
-        {error && <p className="text-sm text-destructive">{error}</p>}
+        {error && <p className="text-xs text-destructive">{error}</p>}
 
         <DialogFooter>
           <Button type="button" variant="secondary" onClick={onClose}>

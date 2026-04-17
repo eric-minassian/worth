@@ -9,21 +9,42 @@ import {
   Upload,
 } from "lucide-react"
 import { useEffect, useState } from "react"
+
 import type { UpdateChannel, UpdaterState } from "@worth/ipc"
 import {
+  Alert,
+  AlertDescription,
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertTitle,
+  Badge,
   Button,
+  buttonVariants,
   Card,
   CardContent,
   CardDescription,
   CardHeader,
   CardTitle,
+  Progress,
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
+  Separator,
+  Tabs,
+  TabsContent,
+  TabsList,
+  TabsTrigger,
+  toast,
 } from "@worth/ui"
-import { callCommand, RpcError } from "../rpc"
+import { callCommand, formatRpcError } from "../rpc"
 
 const statsQuery = queryOptions({
   queryKey: ["system.stats"] as const,
@@ -37,20 +58,12 @@ const updaterQuery = queryOptions({
   staleTime: 0,
 })
 
-type Notice =
-  | { readonly kind: "success"; readonly message: string }
-  | { readonly kind: "error"; readonly message: string }
-
 export const SettingsPage = () => {
   const qc = useQueryClient()
   const stats = useQuery(statsQuery)
   const updater = useQuery(updaterQuery)
-  const [notice, setNotice] = useState<Notice | null>(null)
+  const [rebuildOpen, setRebuildOpen] = useState(false)
 
-  const invalidateAll = () => qc.invalidateQueries()
-
-  // Main-process updater events stream through `onUpdateEvent` so the UI
-  // reflects download progress tick by tick without polling.
   useEffect(() => {
     const unsubscribe = window.worth.onUpdateEvent((raw) => {
       qc.setQueryData<UpdaterState>(updaterQuery.queryKey, raw as UpdaterState)
@@ -58,20 +71,17 @@ export const SettingsPage = () => {
     return unsubscribe
   }, [qc])
 
+  const invalidateAll = () => qc.invalidateQueries()
+
   const exportMutation = useMutation({
     mutationFn: () => callCommand("system.export", {}),
     onSuccess: (result) => {
       if (result.cancelled) return
-      setNotice({
-        kind: "success",
-        message: `Exported ${result.eventCount} events to ${result.path}`,
+      toast.success(`Exported ${result.eventCount} events`, {
+        description: result.path,
       })
     },
-    onError: (e) =>
-      setNotice({
-        kind: "error",
-        message: e instanceof RpcError ? `${e.tag}: ${e.message}` : String(e),
-      }),
+    onError: (e) => toast.error(formatRpcError(e)),
   })
 
   const importMutation = useMutation({
@@ -79,32 +89,20 @@ export const SettingsPage = () => {
     onSuccess: async (result) => {
       if (result.cancelled) return
       await invalidateAll()
-      setNotice({
-        kind: "success",
-        message: `Imported ${result.accepted} new events from ${result.path}. ${result.skipped} already present.`,
+      toast.success(`Imported ${result.accepted} new events`, {
+        description: `${result.skipped} already present.`,
       })
     },
-    onError: (e) =>
-      setNotice({
-        kind: "error",
-        message: e instanceof RpcError ? `${e.tag}: ${e.message}` : String(e),
-      }),
+    onError: (e) => toast.error(formatRpcError(e)),
   })
 
   const rebuildMutation = useMutation({
     mutationFn: () => callCommand("system.rebuildProjections", {}),
     onSuccess: async (result) => {
       await invalidateAll()
-      setNotice({
-        kind: "success",
-        message: `Rebuilt projections from ${result.replayed} events.`,
-      })
+      toast.success(`Rebuilt projections from ${result.replayed} events`)
     },
-    onError: (e) =>
-      setNotice({
-        kind: "error",
-        message: e instanceof RpcError ? `${e.tag}: ${e.message}` : String(e),
-      }),
+    onError: (e) => toast.error(formatRpcError(e)),
   })
 
   const checkUpdatesMutation = useMutation({
@@ -134,110 +132,142 @@ export const SettingsPage = () => {
     mutationFn: () => callCommand("updater.openReleasePage", {}),
   })
 
-  const onRebuild = () => {
-    const ok = window.confirm(
-      "Rebuild projections?\n\nThis truncates accounts, categories, and transactions, then replays the entire event log. The event log itself is untouched. Safe to run anytime.",
-    )
-    if (!ok) return
-    rebuildMutation.mutate()
-  }
 
   return (
-    <div className="mx-auto flex max-w-4xl flex-col gap-6 px-8 py-10">
-      <header>
-        <h2 className="text-2xl font-semibold tracking-tight">Settings</h2>
-        <p className="mt-1 text-sm text-muted-foreground">
-          Device info, backup, and maintenance.
-        </p>
-      </header>
+    <div className="mx-auto flex max-w-4xl flex-col gap-6 px-8 py-6">
+      <Tabs defaultValue="overview">
+        <TabsList>
+          <TabsTrigger value="overview">Overview</TabsTrigger>
+          <TabsTrigger value="backup">Backup</TabsTrigger>
+          <TabsTrigger value="updates">Updates</TabsTrigger>
+        </TabsList>
 
-      {notice && (
-        <Card
-          className={
-            notice.kind === "success"
-              ? "border-emerald-500/40 bg-emerald-500/5"
-              : "border-destructive/40 bg-destructive/5"
-          }
-        >
-          <CardContent className="py-4 text-sm">{notice.message}</CardContent>
-        </Card>
-      )}
+        <TabsContent value="overview" className="flex flex-col gap-4">
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+            <Stat label="Events" value={stats.data?.eventCount.toString() ?? "—"} />
+            <Stat
+              label="Accounts"
+              value={stats.data?.accountCount.toString() ?? "—"}
+            />
+            <Stat
+              label="Categories"
+              value={stats.data?.categoryCount.toString() ?? "—"}
+            />
+            <Stat
+              label="Transactions"
+              value={stats.data?.transactionCount.toString() ?? "—"}
+            />
+            <Stat label="Device id" value={stats.data?.deviceId ?? "—"} mono />
+            <Stat label="Latest HLC" value={stats.data?.lastHlc ?? "—"} mono />
+          </div>
 
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-        <Stat label="Device id" value={stats.data?.deviceId ?? "—"} mono />
-        <Stat label="Latest HLC" value={stats.data?.lastHlc ?? "—"} mono />
-        <Stat label="Events" value={stats.data?.eventCount.toString() ?? "—"} />
-        <Stat label="Accounts" value={stats.data?.accountCount.toString() ?? "—"} />
-        <Stat label="Categories" value={stats.data?.categoryCount.toString() ?? "—"} />
-        <Stat label="Transactions" value={stats.data?.transactionCount.toString() ?? "—"} />
-      </div>
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-sm">Maintenance</CardTitle>
+              <CardDescription className="text-xs">
+                Rebuild projections from the event log. Use this if you suspect
+                projection tables have drifted or after a schema migration.
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <Button
+                variant="secondary"
+                size="sm"
+                onClick={() => setRebuildOpen(true)}
+                disabled={rebuildMutation.isPending}
+              >
+                <RotateCcw />{" "}
+                {rebuildMutation.isPending
+                  ? "Rebuilding…"
+                  : "Rebuild projections"}
+              </Button>
+              <AlertDialog open={rebuildOpen} onOpenChange={setRebuildOpen}>
+                <AlertDialogContent>
+                  <AlertDialogHeader>
+                    <AlertDialogTitle>Rebuild projections?</AlertDialogTitle>
+                    <AlertDialogDescription>
+                      Truncates accounts, categories, and transactions, then
+                      replays the entire event log. The event log itself is
+                      untouched — safe to run anytime, but it can take a moment
+                      on large datasets.
+                    </AlertDialogDescription>
+                  </AlertDialogHeader>
+                  <AlertDialogFooter>
+                    <AlertDialogCancel>Cancel</AlertDialogCancel>
+                    <AlertDialogAction
+                      className={buttonVariants({ variant: "destructive" })}
+                      onClick={() => rebuildMutation.mutate()}
+                    >
+                      Rebuild
+                    </AlertDialogAction>
+                  </AlertDialogFooter>
+                </AlertDialogContent>
+              </AlertDialog>
+            </CardContent>
+          </Card>
+        </TabsContent>
 
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-base">Backup</CardTitle>
-          <CardDescription>
-            The event log is the canonical backup — it carries every mutation you've ever made
-            and can be replayed to reconstruct everything.
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="flex flex-wrap gap-3">
-          <Button onClick={() => exportMutation.mutate()} disabled={exportMutation.isPending}>
-            <Download /> {exportMutation.isPending ? "Exporting…" : "Export event log"}
-          </Button>
-          <Button
-            variant="secondary"
-            onClick={() => importMutation.mutate()}
-            disabled={importMutation.isPending}
-          >
-            <Upload /> {importMutation.isPending ? "Importing…" : "Import event log"}
-          </Button>
-        </CardContent>
-      </Card>
+        <TabsContent value="backup" className="flex flex-col gap-4">
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-sm">Event log</CardTitle>
+              <CardDescription className="text-xs">
+                The event log is the canonical backup — it carries every
+                mutation you've ever made and can be replayed to reconstruct
+                everything.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="flex flex-wrap gap-2">
+              <Button
+                size="sm"
+                onClick={() => exportMutation.mutate()}
+                disabled={exportMutation.isPending}
+              >
+                <Download />{" "}
+                {exportMutation.isPending ? "Exporting…" : "Export"}
+              </Button>
+              <Button
+                variant="secondary"
+                size="sm"
+                onClick={() => importMutation.mutate()}
+                disabled={importMutation.isPending}
+              >
+                <Upload />{" "}
+                {importMutation.isPending ? "Importing…" : "Import"}
+              </Button>
+            </CardContent>
+          </Card>
+        </TabsContent>
 
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-base">Maintenance</CardTitle>
-          <CardDescription>
-            Rebuild projections from the event log. Use this if you suspect the projection
-            tables have drifted or after a projection-schema migration.
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <Button
-            variant="secondary"
-            onClick={onRebuild}
-            disabled={rebuildMutation.isPending}
-          >
-            <RotateCcw /> {rebuildMutation.isPending ? "Rebuilding…" : "Rebuild projections"}
-          </Button>
-        </CardContent>
-      </Card>
-
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-base">Updates</CardTitle>
-          <CardDescription>
-            Stable tracks tagged releases. Nightly updates on every commit to main — useful for
-            trying out in-progress features, but occasionally rough.
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="flex flex-col gap-4">
-          <UpdaterPanel
-            state={updater.data ?? null}
-            onCheck={() => checkUpdatesMutation.mutate()}
-            onDownload={() => downloadMutation.mutate()}
-            onInstall={() => installMutation.mutate()}
-            onOpenRelease={() => openReleaseMutation.mutate()}
-            onChannelChange={(c) => setChannelMutation.mutate(c)}
-            busy={
-              checkUpdatesMutation.isPending ||
-              downloadMutation.isPending ||
-              installMutation.isPending ||
-              setChannelMutation.isPending
-            }
-          />
-        </CardContent>
-      </Card>
+        <TabsContent value="updates" className="flex flex-col gap-4">
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-sm">Update channel</CardTitle>
+              <CardDescription className="text-xs">
+                Stable tracks tagged releases. Nightly updates on every commit
+                to main — useful for trying out in-progress features, but
+                occasionally rough.
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <UpdaterPanel
+                state={updater.data ?? null}
+                onCheck={() => checkUpdatesMutation.mutate()}
+                onDownload={() => downloadMutation.mutate()}
+                onInstall={() => installMutation.mutate()}
+                onOpenRelease={() => openReleaseMutation.mutate()}
+                onChannelChange={(c) => setChannelMutation.mutate(c)}
+                busy={
+                  checkUpdatesMutation.isPending ||
+                  downloadMutation.isPending ||
+                  installMutation.isPending ||
+                  setChannelMutation.isPending
+                }
+              />
+            </CardContent>
+          </Card>
+        </TabsContent>
+      </Tabs>
     </div>
   )
 }
@@ -262,20 +292,30 @@ const UpdaterPanel = ({
   onChannelChange,
 }: UpdaterPanelProps) => {
   if (!state) {
-    return <div className="text-sm text-muted-foreground">Loading updater status…</div>
+    return (
+      <div className="text-xs text-muted-foreground">
+        Loading updater status…
+      </div>
+    )
   }
 
   return (
     <div className="flex flex-col gap-4">
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-        <div>
-          <div className="text-xs uppercase text-muted-foreground">Channel</div>
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+        <div className="flex flex-col gap-1.5">
+          <span className="text-xs uppercase text-muted-foreground">
+            Channel
+          </span>
           <Select
             value={state.channel}
             onValueChange={(v) => onChannelChange(v as UpdateChannel)}
-            disabled={busy || state.status === "downloading" || state.status === "ready"}
+            disabled={
+              busy ||
+              state.status === "downloading" ||
+              state.status === "ready"
+            }
           >
-            <SelectTrigger className="mt-1 w-full">
+            <SelectTrigger className="w-full">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
@@ -284,31 +324,37 @@ const UpdaterPanel = ({
             </SelectContent>
           </Select>
         </div>
-        <div>
-          <div className="text-xs uppercase text-muted-foreground">Installed version</div>
-          <div className="mt-1 font-mono text-sm break-all">{state.currentVersion}</div>
+        <div className="flex flex-col gap-1.5">
+          <span className="text-xs uppercase text-muted-foreground">
+            Installed version
+          </span>
+          <div className="flex h-7 items-center rounded-md border bg-input/20 px-2 font-mono text-xs">
+            {state.currentVersion}
+          </div>
         </div>
       </div>
 
-      <StatusLine state={state} />
+      <Separator />
 
-      <div className="flex flex-wrap gap-3">
+      <UpdaterStatus state={state} />
+
+      <div className="flex flex-wrap gap-2">
         {state.status === "idle" ||
         state.status === "not-available" ||
         state.status === "error" ? (
-          <Button onClick={onCheck} disabled={busy}>
+          <Button size="sm" onClick={onCheck} disabled={busy}>
             <RefreshCw /> {busy ? "Checking…" : "Check for updates"}
           </Button>
         ) : null}
 
         {state.status === "available" ? (
-          <Button onClick={onDownload} disabled={busy}>
+          <Button size="sm" onClick={onDownload} disabled={busy}>
             <Download /> Download {state.nextVersion}
           </Button>
         ) : null}
 
         {state.status === "ready" ? (
-          <Button onClick={onInstall} disabled={busy}>
+          <Button size="sm" onClick={onInstall} disabled={busy}>
             <CheckCircle2 /> Install and relaunch
           </Button>
         ) : null}
@@ -316,7 +362,12 @@ const UpdaterPanel = ({
         {state.status === "available" ||
         state.status === "not-available" ||
         state.status === "ready" ? (
-          <Button variant="secondary" onClick={onOpenRelease} disabled={busy}>
+          <Button
+            size="sm"
+            variant="secondary"
+            onClick={onOpenRelease}
+            disabled={busy}
+          >
             <ExternalLink /> Release notes
           </Button>
         ) : null}
@@ -325,28 +376,36 @@ const UpdaterPanel = ({
   )
 }
 
-const StatusLine = ({ state }: { readonly state: UpdaterState }) => {
+const UpdaterStatus = ({ state }: { readonly state: UpdaterState }) => {
   switch (state.status) {
     case "idle":
       return (
-        <div className="text-sm text-muted-foreground">
+        <p className="text-xs text-muted-foreground">
           Ready. Last checked: never this session.
-        </div>
+        </p>
       )
     case "checking":
-      return <div className="text-sm text-muted-foreground">Checking for updates…</div>
+      return (
+        <p className="text-xs text-muted-foreground">Checking for updates…</p>
+      )
     case "not-available":
       return (
-        <div className="text-sm text-emerald-500">
-          You're on the latest {state.channel} build.
-        </div>
+        <Alert>
+          <CheckCircle2 />
+          <AlertTitle>You're on the latest {state.channel} build.</AlertTitle>
+        </Alert>
       )
     case "available":
       return (
-        <div className="text-sm">
-          <span className="text-primary">Update available:</span>{" "}
-          <span className="font-mono">{state.nextVersion}</span>
-        </div>
+        <Alert>
+          <Download />
+          <AlertTitle>Update available</AlertTitle>
+          <AlertDescription>
+            <Badge variant="outline" className="font-mono">
+              {state.nextVersion}
+            </Badge>
+          </AlertDescription>
+        </Alert>
       )
     case "downloading": {
       const pct =
@@ -355,16 +414,14 @@ const StatusLine = ({ state }: { readonly state: UpdaterState }) => {
           : 0
       return (
         <div className="flex flex-col gap-2">
-          <div className="text-sm">
-            Downloading <span className="font-mono">{state.nextVersion}</span> —{" "}
-            {pct.toFixed(0)}%
+          <div className="flex items-center justify-between text-xs">
+            <span>
+              Downloading{" "}
+              <span className="font-mono">{state.nextVersion}</span>
+            </span>
+            <span className="text-muted-foreground">{pct.toFixed(0)}%</span>
           </div>
-          <div className="h-2 overflow-hidden rounded-full bg-muted">
-            <div
-              className="h-full bg-primary transition-[width] duration-150"
-              style={{ width: `${pct.toString()}%` }}
-            />
-          </div>
+          <Progress value={pct} />
           <div className="text-xs text-muted-foreground">
             {formatBytes(state.transferred)} / {formatBytes(state.total)}
           </div>
@@ -373,14 +430,22 @@ const StatusLine = ({ state }: { readonly state: UpdaterState }) => {
     }
     case "ready":
       return (
-        <div className="text-sm text-emerald-500">
-          <span className="font-mono">{state.nextVersion}</span> downloaded. Click install
-          to relaunch into the new version.
-        </div>
+        <Alert>
+          <CheckCircle2 />
+          <AlertTitle>
+            <span className="font-mono">{state.nextVersion}</span> downloaded
+          </AlertTitle>
+          <AlertDescription>
+            Click install to relaunch into the new version.
+          </AlertDescription>
+        </Alert>
       )
     case "error":
       return (
-        <div className="text-sm text-destructive">Update failed: {state.message}</div>
+        <Alert variant="destructive">
+          <AlertTitle>Update failed</AlertTitle>
+          <AlertDescription>{state.message}</AlertDescription>
+        </Alert>
       )
   }
 }
@@ -406,8 +471,12 @@ interface StatProps {
 const Stat = ({ label, value, mono = false }: StatProps) => (
   <Card>
     <CardHeader>
-      <CardDescription>{label}</CardDescription>
-      <CardTitle className={mono ? "font-mono text-sm break-all" : "text-2xl"}>
+      <CardDescription className="text-xs">{label}</CardDescription>
+      <CardTitle
+        className={
+          mono ? "font-mono text-xs break-all" : "text-lg tabular-nums"
+        }
+      >
         {value}
       </CardTitle>
     </CardHeader>

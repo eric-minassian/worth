@@ -15,6 +15,7 @@ const api: WorthApi = {
       ipcRenderer.off(UPDATE_EVENT_CHANNEL, listener)
     }
   },
+  platform: process.platform,
 }
 
 contextBridge.exposeInMainWorld("worth", api)

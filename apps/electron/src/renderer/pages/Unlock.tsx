@@ -1,6 +1,19 @@
 import { useState, type FormEvent } from "react"
-import { Button, Card, CardContent, CardDescription, CardHeader, CardTitle, Input, Label } from "@worth/ui"
+import {
+  Alert,
+  AlertDescription,
+  AlertTitle,
+  Button,
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+  Input,
+  Label,
+} from "@worth/ui"
 import { callCommand } from "../rpc"
+import { WorthMark } from "../components/WorthMark"
 
 interface UnlockProps {
   readonly initialized: boolean
@@ -49,7 +62,8 @@ export const Unlock = ({ initialized, onUnlocked }: UnlockProps) => {
     <div className="flex h-full items-center justify-center bg-background p-6">
       <Card className="w-full max-w-sm">
         <CardHeader>
-          <CardTitle>{initialized ? "Unlock Worth" : "Create a password"}</CardTitle>
+          <WorthMark className="mb-2 size-10 rounded-lg" />
+          <CardTitle>{initialized ? "Unlock Worth" : "Welcome to Worth"}</CardTitle>
           <CardDescription>
             {initialized
               ? "Enter your password to unlock your encrypted data."
@@ -81,9 +95,18 @@ export const Unlock = ({ initialized, onUnlocked }: UnlockProps) => {
                 />
               </div>
             ) : null}
-            {error ? <p className="text-sm text-destructive">{error}</p> : null}
+            {error ? (
+              <Alert variant="destructive">
+                <AlertTitle>Unable to unlock</AlertTitle>
+                <AlertDescription>{error}</AlertDescription>
+              </Alert>
+            ) : null}
             <Button type="submit" disabled={submitting}>
-              {submitting ? "Unlocking…" : initialized ? "Unlock" : "Create vault"}
+              {submitting
+                ? "Unlocking…"
+                : initialized
+                  ? "Unlock"
+                  : "Create vault"}
             </Button>
           </form>
         </CardContent>

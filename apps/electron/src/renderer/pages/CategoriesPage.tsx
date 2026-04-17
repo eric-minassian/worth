@@ -1,9 +1,16 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
-import { Plus } from "lucide-react"
-import { useState, type FormEvent } from "react"
+import { Plus, Tag } from "lucide-react"
+import { useMemo, useState, type FormEvent } from "react"
+
 import type { CategoryId } from "@worth/domain"
 import {
   Button,
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+  cn,
   Dialog,
   DialogContent,
   DialogDescription,
@@ -18,87 +25,134 @@ import {
   SelectItem,
   SelectTrigger,
   SelectValue,
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
+  toast,
 } from "@worth/ui"
-import { callCommand, RpcError } from "../rpc"
+import { callCommand, formatRpcError } from "../rpc"
 import { categoriesQuery, invalidationKeys } from "../lib/queries"
+import { PageActions } from "../Layout"
+import { EmptyState } from "../components/EmptyState"
 
 const NO_PARENT = "__none__"
+
+const COLOR_PRESETS = [
+  "#22c55e",
+  "#10b981",
+  "#3b82f6",
+  "#6366f1",
+  "#8b5cf6",
+  "#ec4899",
+  "#f43f5e",
+  "#f97316",
+  "#eab308",
+  "#84cc16",
+  "#06b6d4",
+  "#64748b",
+] as const
+
+interface CategoryNode {
+  readonly id: CategoryId
+  readonly name: string
+  readonly color: string | null
+  readonly children: CategoryNode[]
+}
 
 export const CategoriesPage = () => {
   const categories = useQuery(categoriesQuery)
   const [open, setOpen] = useState(false)
 
+  const tree = useMemo<readonly CategoryNode[]>(() => {
+    const list = categories.data ?? []
+    const byId = new Map<CategoryId, CategoryNode>()
+    for (const c of list) {
+      byId.set(c.id, { id: c.id, name: c.name, color: c.color, children: [] })
+    }
+    const roots: CategoryNode[] = []
+    for (const c of list) {
+      const node = byId.get(c.id)
+      if (!node) continue
+      const parent = c.parentId ? byId.get(c.parentId) : null
+      if (parent) parent.children.push(node)
+      else roots.push(node)
+    }
+    return roots
+  }, [categories.data])
+
   return (
-    <div className="mx-auto flex max-w-5xl flex-col gap-6 px-8 py-10">
-      <header className="flex items-center justify-between">
-        <div>
-          <h2 className="text-2xl font-semibold tracking-tight">Categories</h2>
-          <p className="mt-1 text-sm text-muted-foreground">
-            Tags you attach to transactions to track where your money goes.
-          </p>
-        </div>
+    <div className="mx-auto flex max-w-5xl flex-col gap-6 px-8 py-6">
+      <PageActions>
         <Dialog open={open} onOpenChange={setOpen}>
           <DialogTrigger asChild>
-            <Button>
+            <Button size="sm">
               <Plus /> Add category
             </Button>
           </DialogTrigger>
-          <CategoryDialog existing={categories.data ?? []} onClose={() => setOpen(false)} />
+          <CategoryDialog
+            existing={categories.data ?? []}
+            onClose={() => setOpen(false)}
+          />
         </Dialog>
-      </header>
+      </PageActions>
 
-      <div className="rounded-lg border bg-card">
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead>Name</TableHead>
-              <TableHead>Parent</TableHead>
-              <TableHead>Color</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {categories.data && categories.data.length > 0 ? (
-              categories.data.map((c) => {
-                const parent = categories.data?.find((p) => p.id === c.parentId)
-                return (
-                  <TableRow key={c.id}>
-                    <TableCell className="font-medium">{c.name}</TableCell>
-                    <TableCell className="text-muted-foreground">{parent?.name ?? "—"}</TableCell>
-                    <TableCell>
-                      {c.color ? (
-                        <span className="inline-flex items-center gap-2 text-muted-foreground">
-                          <span
-                            className="size-3 rounded-full"
-                            style={{ backgroundColor: c.color }}
-                          />
-                          {c.color}
-                        </span>
-                      ) : (
-                        <span className="text-muted-foreground">—</span>
-                      )}
-                    </TableCell>
-                  </TableRow>
-                )
-              })
-            ) : (
-              <TableRow>
-                <TableCell colSpan={3} className="py-10 text-center text-sm text-muted-foreground">
-                  No categories yet.
-                </TableCell>
-              </TableRow>
-            )}
-          </TableBody>
-        </Table>
-      </div>
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-sm">All categories</CardTitle>
+          <CardDescription className="text-xs">
+            Nest categories with a parent for hierarchies like Food → Groceries.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          {tree.length > 0 ? (
+            <ul className="flex flex-col gap-1">
+              {tree.map((node) => (
+                <CategoryRow key={node.id} node={node} depth={0} />
+              ))}
+            </ul>
+          ) : (
+            <EmptyState
+              Icon={Tag}
+              title="No categories yet"
+              hint="Add categories like Groceries, Rent, or Salary to track flow."
+            />
+          )}
+        </CardContent>
+      </Card>
     </div>
   )
 }
+
+const CategoryRow = ({
+  node,
+  depth,
+}: {
+  node: CategoryNode
+  depth: number
+}) => (
+  <li>
+    <div
+      className="flex items-center gap-2 rounded-md px-2 py-1.5 hover:bg-muted/40"
+      style={{ paddingLeft: 8 + depth * 16 }}
+    >
+      <span
+        className="size-2.5 shrink-0 rounded-full"
+        style={{ backgroundColor: node.color ?? "var(--muted-foreground)" }}
+      />
+      <span className="text-xs font-medium">{node.name}</span>
+      {node.children.length > 0 && (
+        <span className="ml-auto text-xs text-muted-foreground">
+          {node.children.length} child
+          {node.children.length === 1 ? "" : "ren"}
+        </span>
+      )}
+    </div>
+    {node.children.length > 0 && (
+      <ul className="flex flex-col gap-1">
+        {node.children.map((child) => (
+          <CategoryRow key={child.id} node={child} depth={depth + 1} />
+        ))}
+      </ul>
+    )}
+  </li>
+)
 
 interface CategoryDialogProps {
   readonly existing: readonly { id: CategoryId; name: string }[]
@@ -109,7 +163,7 @@ const CategoryDialog = ({ existing, onClose }: CategoryDialogProps) => {
   const qc = useQueryClient()
   const [name, setName] = useState("")
   const [parentId, setParentId] = useState<string>(NO_PARENT)
-  const [color, setColor] = useState("")
+  const [color, setColor] = useState<string>(COLOR_PRESETS[0])
   const [error, setError] = useState<string | null>(null)
 
   const mutation = useMutation({
@@ -121,12 +175,13 @@ const CategoryDialog = ({ existing, onClose }: CategoryDialogProps) => {
       }),
     onSuccess: async () => {
       await qc.invalidateQueries({ queryKey: invalidationKeys.categories })
+      toast.success(`Created ${name.trim()}`)
       setName("")
       setParentId(NO_PARENT)
-      setColor("")
+      setColor(COLOR_PRESETS[0])
       onClose()
     },
-    onError: (e) => setError(e instanceof RpcError ? `${e.tag}: ${e.message}` : String(e)),
+    onError: (e) => setError(formatRpcError(e)),
   })
 
   const onSubmit = (e: FormEvent) => {
@@ -145,7 +200,7 @@ const CategoryDialog = ({ existing, onClose }: CategoryDialogProps) => {
         <DialogHeader>
           <DialogTitle>New category</DialogTitle>
           <DialogDescription>
-            Optionally nest under a parent category for hierarchies like Food → Groceries.
+            Optionally nest under a parent for hierarchies like Food → Groceries.
           </DialogDescription>
         </DialogHeader>
 
@@ -167,7 +222,7 @@ const CategoryDialog = ({ existing, onClose }: CategoryDialogProps) => {
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value={NO_PARENT}>None</SelectItem>
+              <SelectItem value={NO_PARENT}>None (top level)</SelectItem>
               {existing.map((p) => (
                 <SelectItem key={p.id} value={p.id}>
                   {p.name}
@@ -178,23 +233,32 @@ const CategoryDialog = ({ existing, onClose }: CategoryDialogProps) => {
         </div>
 
         <div className="flex flex-col gap-2">
-          <Label htmlFor="cat-color">Color (hex)</Label>
-          <Input
-            id="cat-color"
-            value={color}
-            onChange={(e) => setColor(e.target.value)}
-            placeholder="#22c55e"
-          />
+          <Label>Color</Label>
+          <div className="flex flex-wrap gap-1.5">
+            {COLOR_PRESETS.map((c) => (
+              <button
+                key={c}
+                type="button"
+                onClick={() => setColor(c)}
+                aria-label={c}
+                className={cn(
+                  "size-6 rounded-full ring-offset-2 ring-offset-background transition",
+                  color === c && "ring-2 ring-ring",
+                )}
+                style={{ backgroundColor: c }}
+              />
+            ))}
+          </div>
         </div>
 
-        {error && <p className="text-sm text-destructive">{error}</p>}
+        {error && <p className="text-xs text-destructive">{error}</p>}
 
         <DialogFooter>
           <Button type="button" variant="secondary" onClick={onClose}>
             Cancel
           </Button>
           <Button type="submit" disabled={mutation.isPending}>
-            {mutation.isPending ? "Creating…" : "Create"}
+            {mutation.isPending ? "Creating…" : "Create category"}
           </Button>
         </DialogFooter>
       </form>

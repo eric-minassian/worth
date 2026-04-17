@@ -1,9 +1,14 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query"
-import { FileUp } from "lucide-react"
+import { CheckCircle2, FileUp } from "lucide-react"
 import { useState, type ChangeEvent } from "react"
+
 import type { AccountId } from "@worth/domain"
 import type { InputOf, OutputOf } from "@worth/ipc"
 import {
+  Alert,
+  AlertDescription,
+  AlertTitle,
+  Badge,
   Button,
   DialogContent,
   DialogDescription,
@@ -17,14 +22,16 @@ import {
   SelectItem,
   SelectTrigger,
   SelectValue,
+  Separator,
   Table,
   TableBody,
   TableCell,
   TableHead,
   TableHeader,
   TableRow,
+  toast,
 } from "@worth/ui"
-import { callCommand, RpcError } from "../rpc"
+import { callCommand, formatRpcError } from "../rpc"
 import { invalidationKeys } from "../lib/queries"
 
 type ColumnRole = "date" | "payee" | "amount" | "memo" | "skip"
@@ -65,7 +72,7 @@ export const ImportDialog = ({ accounts, onClose }: ImportDialogProps) => {
       }
       setMapping(initial)
     },
-    onError: (e) => setError(e instanceof RpcError ? `${e.tag}: ${e.message}` : e.message),
+    onError: (e) => setError(formatRpcError(e)),
   })
 
   const commitMutation = useMutation({
@@ -74,8 +81,9 @@ export const ImportDialog = ({ accounts, onClose }: ImportDialogProps) => {
     onSuccess: async (data) => {
       setResult(data)
       await qc.invalidateQueries({ queryKey: invalidationKeys.transactions })
+      toast.success(`Imported ${data.imported} transactions`)
     },
-    onError: (e) => setError(e instanceof RpcError ? `${e.tag}: ${e.message}` : e.message),
+    onError: (e) => setError(formatRpcError(e)),
   })
 
   const onFile = async (e: ChangeEvent<HTMLInputElement>) => {
@@ -97,29 +105,38 @@ export const ImportDialog = ({ accounts, onClose }: ImportDialogProps) => {
     commitMutation.mutate({ accountId, text, mapping: mappingAsRecord })
   }
 
-  const mappingComplete =
-    preview !== null &&
-    Object.values(mapping).includes("date") &&
-    Object.values(mapping).includes("payee") &&
-    Object.values(mapping).includes("amount")
+  const requiredRoles: readonly ColumnRole[] = ["date", "payee", "amount"]
+  const assigned = new Set(Object.values(mapping))
+  const missing = requiredRoles.filter((r) => !assigned.has(r))
+  const mappingComplete = preview !== null && missing.length === 0
 
   return (
     <DialogContent className="sm:max-w-3xl">
       <DialogHeader>
         <DialogTitle>Import transactions</DialogTitle>
         <DialogDescription>
-          Upload a CSV from your bank. Confirm the column mapping, pick the target account, and
-          import. Re-running the same file is safe — duplicates are skipped.
+          Upload a CSV from your bank. Confirm the column mapping, pick the
+          target account, and import. Re-running the same file is safe —
+          duplicates are skipped.
         </DialogDescription>
       </DialogHeader>
 
       {result ? (
-        <ImportResultView result={result} filename={filename} onDone={onClose} />
+        <ImportResultView
+          result={result}
+          filename={filename}
+          onDone={onClose}
+        />
       ) : (
-        <>
+        <div className="flex flex-col gap-4">
           <div className="flex flex-col gap-2">
             <Label htmlFor="csv-file">CSV file</Label>
-            <Input id="csv-file" type="file" accept=".csv,text/csv" onChange={onFile} />
+            <Input
+              id="csv-file"
+              type="file"
+              accept=".csv,text/csv"
+              onChange={onFile}
+            />
             {filename && (
               <p className="text-xs text-muted-foreground">
                 {filename} — {preview?.totalRows ?? 0} rows
@@ -148,8 +165,28 @@ export const ImportDialog = ({ accounts, onClose }: ImportDialogProps) => {
                 </Select>
               </div>
 
+              <Separator />
+
               <div className="flex flex-col gap-2">
-                <Label>Column mapping</Label>
+                <div className="flex items-center justify-between">
+                  <Label>Column mapping</Label>
+                  <div className="flex items-center gap-1">
+                    {requiredRoles.map((r) => (
+                      <Badge
+                        key={r}
+                        variant="outline"
+                        className="gap-1 text-xs capitalize"
+                      >
+                        {assigned.has(r) ? (
+                          <CheckCircle2 className="size-2.5 text-emerald-600 dark:text-emerald-400" />
+                        ) : (
+                          <span className="size-2.5 rounded-full border border-dashed" />
+                        )}
+                        {r}
+                      </Badge>
+                    ))}
+                  </div>
+                </div>
                 <div className="max-h-80 overflow-auto rounded-md border">
                   <Table>
                     <TableHeader>
@@ -157,16 +194,19 @@ export const ImportDialog = ({ accounts, onClose }: ImportDialogProps) => {
                         {preview.headers.map((header, idx) => (
                           <TableHead key={idx} className="min-w-40">
                             <div className="flex flex-col gap-1.5 py-1">
-                              <span className="font-semibold normal-case tracking-normal text-foreground">
+                              <span className="text-xs font-semibold normal-case tracking-normal text-foreground">
                                 {header || `Column ${idx + 1}`}
                               </span>
                               <Select
                                 value={mapping[idx] ?? "skip"}
                                 onValueChange={(v) =>
-                                  setMapping({ ...mapping, [idx]: v as ColumnRole })
+                                  setMapping({
+                                    ...mapping,
+                                    [idx]: v as ColumnRole,
+                                  })
                                 }
                               >
-                                <SelectTrigger className="h-8">
+                                <SelectTrigger className="h-7">
                                   <SelectValue />
                                 </SelectTrigger>
                                 <SelectContent>
@@ -186,7 +226,10 @@ export const ImportDialog = ({ accounts, onClose }: ImportDialogProps) => {
                       {preview.sampleRows.map((row, rIdx) => (
                         <TableRow key={rIdx}>
                           {preview.headers.map((_, cIdx) => (
-                            <TableCell key={cIdx} className="text-xs text-muted-foreground">
+                            <TableCell
+                              key={cIdx}
+                              className="text-xs text-muted-foreground"
+                            >
                               {row[cIdx] ?? ""}
                             </TableCell>
                           ))}
@@ -195,18 +238,15 @@ export const ImportDialog = ({ accounts, onClose }: ImportDialogProps) => {
                     </TableBody>
                   </Table>
                 </div>
-                {!mappingComplete && (
-                  <p className="text-xs text-muted-foreground">
-                    Assign at least <span className="font-medium">date</span>,{" "}
-                    <span className="font-medium">payee</span>, and{" "}
-                    <span className="font-medium">amount</span> before importing.
-                  </p>
-                )}
               </div>
             </>
           )}
 
-          {error && <p className="text-sm text-destructive">{error}</p>}
+          {error && (
+            <Alert variant="destructive">
+              <AlertDescription>{error}</AlertDescription>
+            </Alert>
+          )}
 
           <DialogFooter>
             <Button type="button" variant="secondary" onClick={onClose}>
@@ -215,13 +255,15 @@ export const ImportDialog = ({ accounts, onClose }: ImportDialogProps) => {
             <Button
               type="button"
               onClick={onCommit}
-              disabled={!mappingComplete || !accountId || commitMutation.isPending}
+              disabled={
+                !mappingComplete || !accountId || commitMutation.isPending
+              }
             >
               <FileUp />
               {commitMutation.isPending ? "Importing…" : "Import"}
             </Button>
           </DialogFooter>
-        </>
+        </div>
       )}
     </DialogContent>
   )
@@ -235,21 +277,23 @@ interface ImportResultViewProps {
 
 const ImportResultView = ({ result, filename, onDone }: ImportResultViewProps) => (
   <div className="flex flex-col gap-4">
-    <div className="rounded-md border bg-card p-4">
-      <p className="text-sm">
-        Imported{" "}
-        <span className="font-semibold text-foreground">
-          {result.imported} new transaction{result.imported === 1 ? "" : "s"}
-        </span>{" "}
-        from <span className="font-medium">{filename}</span>.
-      </p>
-      <p className="mt-1 text-sm text-muted-foreground">
-        {result.duplicates > 0 && `${result.duplicates} duplicate${result.duplicates === 1 ? "" : "s"} skipped. `}
+    <Alert>
+      <CheckCircle2 />
+      <AlertTitle>
+        Imported {result.imported} new transaction
+        {result.imported === 1 ? "" : "s"}
+        {filename ? ` from ${filename}` : ""}
+      </AlertTitle>
+      <AlertDescription>
+        {result.duplicates > 0 &&
+          `${result.duplicates} duplicate${result.duplicates === 1 ? "" : "s"} skipped. `}
         {result.errors.length > 0 &&
           `${result.errors.length} row${result.errors.length === 1 ? "" : "s"} had errors.`}
-        {result.duplicates === 0 && result.errors.length === 0 && "No duplicates or errors."}
-      </p>
-    </div>
+        {result.duplicates === 0 &&
+          result.errors.length === 0 &&
+          "No duplicates or errors."}
+      </AlertDescription>
+    </Alert>
 
     {result.errors.length > 0 && (
       <div className="max-h-40 overflow-auto rounded-md border bg-card p-3 text-xs">

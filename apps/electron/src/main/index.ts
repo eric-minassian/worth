@@ -7,11 +7,18 @@ import { makeVaultController } from "./vault"
 import { Updater } from "./updater"
 
 const createWindow = (): BrowserWindow => {
+  const isMac = process.platform === "darwin"
   const win = new BrowserWindow({
     width: 1200,
     height: 800,
     show: false,
     backgroundColor: "#0a0a0a",
+    ...(isMac
+      ? {
+          titleBarStyle: "hiddenInset" as const,
+          trafficLightPosition: { x: 14, y: 14 },
+        }
+      : {}),
     webPreferences: {
       preload: path.join(__dirname, "../preload/index.js"),
       contextIsolation: true,

@@ -422,4 +422,16 @@ export type RpcResponseEnvelope = Schema.Schema.Type<typeof RpcResponseEnvelope>
 export interface WorthApi {
   readonly rpc: (message: RpcRequestEnvelope) => Promise<RpcResponseEnvelope>
   readonly onUpdateEvent: (handler: (state: unknown) => void) => () => void
+  readonly platform:
+    | "aix"
+    | "android"
+    | "darwin"
+    | "freebsd"
+    | "haiku"
+    | "linux"
+    | "openbsd"
+    | "sunos"
+    | "win32"
+    | "cygwin"
+    | "netbsd"
 }

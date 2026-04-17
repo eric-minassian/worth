@@ -14,6 +14,14 @@ export class RpcError extends Error {
 const formatIssue = (issue: unknown): string =>
   issue instanceof Error ? issue.message : String(issue)
 
+/** Human-readable error message for toasts / inline errors. */
+export const formatRpcError = (e: unknown): string =>
+  e instanceof RpcError
+    ? `${e.tag}: ${e.message}`
+    : e instanceof Error
+      ? e.message
+      : String(e)
+
 /**
  * Typed RPC caller. Sends `{ kind, input }` to the main process, decodes the
  * response, and either returns the strongly-typed output or throws `RpcError`.

@@ -1,4 +1,18 @@
-import type { Money } from "@worth/domain"
+import type { AccountType, Money } from "@worth/domain"
+
+export const ACCOUNT_TYPE_LABEL: Record<AccountType, string> = {
+  checking: "Checking",
+  savings: "Savings",
+  credit: "Credit",
+  cash: "Cash",
+  other: "Other",
+}
+
+/** Tailwind classes for a signed money amount in a right-aligned table cell. */
+export const amountClass = (minor: bigint): string =>
+  minor < 0n
+    ? "text-right font-medium tabular-nums text-destructive"
+    : "text-right font-medium tabular-nums text-emerald-600 dark:text-emerald-400"
 
 /** Format a Money value as a localized currency string. */
 export const formatMoney = (money: Money, locale = "en-US"): string => {

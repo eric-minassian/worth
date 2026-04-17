@@ -21,13 +21,21 @@ asarUnpack:
   - "**/bindings/**"
   - "**/file-uri-to-path/**"
 
+# Ad-hoc signs the .app bundle after packaging. Without this the bundle is
+# completely unsigned and macOS refuses to launch it with a "damaged" error
+# once the DMG download has flagged it with `com.apple.quarantine`.
+afterPack: ./scripts/afterPack.mjs
+
 mac:
   category: public.app-category.finance
   target:
     - target: dmg
       arch:
         - arm64
-  # App is not code-signed — Apple Developer Program ($99/yr) is not used.
+  # No Apple Developer ID — ad-hoc signing happens in the afterPack hook.
+  # Leaving `identity` unset lets electron-builder skip its own (optional)
+  # Developer ID lookup while the afterPack hook guarantees we end up with
+  # at least a `-` (ad-hoc) signature.
   identity: null
   gatekeeperAssess: false
 

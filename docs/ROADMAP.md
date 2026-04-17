@@ -142,41 +142,9 @@ Small-to-medium items that have been noted during prior work but not done. Good 
 - **CI.** No CI configured. Minimum: typecheck, lint, test on push; build main on release. Consider GitHub Actions runners for macOS (native module build). Tests must run on the same OS the app ships on for the native-module ABI to match, or use Docker.
 - **Code signing + notarization.** Required for macOS distribution. Electron-builder handles the mechanics.
 
-## 6. Gotchas future agents should know up front
+## 6. Gotchas
 
-### Effect v4 beta quirks (different from v3)
-- `Context.Service<Self, Shape>()("id") {}` (no `Context.Tag`).
-- `Schema.Union([...])`, `Schema.Literals([...])`, `Schema.Record(key, value)` — positional arrays / args, not rest spread or config objects.
-- Decoders return `Result` (`_tag: "Success" | "Failure"`, `.success` / `.failure`), not `Either`. Use `decodeUnknownResult` / `encodeUnknownResult`.
-- `Layer.effect(Service)(effect)` replaces v3 `Layer.scoped`.
-- `Cause.findErrorOption` replaces `Cause.failureOption`.
-- Keep concrete schema types on `CommandDef` (generics bounded by `Schema.Top`) — `Schema.Schema<T>` is too loose for decoders that require `never` services.
-
-### Native module ABI (the one that bit us)
-- `better-sqlite3` is native. Electron ships its own Node with a different ABI than system Node.
-- `apps/electron` `postinstall` runs `electron-rebuild -f -w better-sqlite3` so the single `.node` binary is Electron-compatible.
-- Tests run through Electron's Node (`ELECTRON_RUN_AS_NODE=1 apps/electron/node_modules/.bin/electron scripts/electron-vitest.mjs run`) so they use the same ABI. One build, no ping-pong. Do not undo this.
-- If adding another native dep (e.g. `better-sqlite3-multiple-ciphers`), update the `electron-rebuild` watchlist and the pnpm `onlyBuiltDependencies` allowlist.
-
-### Tailwind v4 + shadcn in a monorepo
-- `packages/ui` has its own `components.json` with `@worth/ui/*` aliases. Self-reference resolves via:
-  - `tsconfig.json` `paths: { "@worth/ui/*": ["./src/*"] }` for TypeScript.
-  - `package.json` `exports` wildcards for `./components/*`, `./lib/*`, `./hooks/*` for Vite at consumption time.
-- Renderer `index.css` includes `@source "../../../../packages/ui/src"` so Tailwind scans shadcn classes across the workspace. If you move files, update the `@source` path.
-- Tailwind v4 has no `tailwind.config.js`. Theme lives in CSS via `@theme inline`. Don't create a config file.
-
-### Drizzle + SQLite
-- No native bigint support on integer columns (only via `blob` mode). Amounts are stored as `number` mode; services convert `bigint` ↔ `number` at the boundary (`Number(money.minor)` on write, `BigInt(row.amountMinor)` on read). Practical cap is ~90 trillion dollars — fine.
-- `integer("...", { mode: "timestamp_ms" })` if you want auto Date conversion. We use raw `number` mode and pass ms-since-epoch because events already carry that.
-
-### Electron packaging pitfalls
-- `type: "module"` not set on `apps/electron/package.json` on purpose — keeps main/preload outputs CJS, which sidesteps ESM preload quirks across Electron versions. Renderer is ESM (Vite handles it).
-- Workspace packages are **bundled into** main and preload, not externalized (`build.externalizeDeps: { exclude: ["@worth/..."] }` in `electron.vite.config.ts`). Without this, Node's ESM loader tries to resolve extensionless imports from workspace sources and fails.
-- Main process entry uses `__dirname` directly (CJS), no `import.meta.url` dance. Stay on CJS here unless there's a concrete reason not to.
-
-### Event determinism
-- Every event that updates a projection field must carry every value that field depends on. **Do not call `Date.now()` inside `applyEvent`.** We hit this with `TransactionCategorized` missing its `at` field — caught by the rebuildProjections property test.
-- Add a property test for any new event type: run commands → snapshot → `rebuildProjections` → snapshot → assert equal.
+Framework-specific footguns that will eat a session if you don't know them live in [`docs/GOTCHAS.md`](./GOTCHAS.md). Check there first when something breaks in an unfamiliar way (Effect v4 API differences, native-module ABI, shadcn/Tailwind monorepo setup, Drizzle SQLite bigint, Electron packaging, event determinism, HLC).
 
 ## 7. Where to find things
 

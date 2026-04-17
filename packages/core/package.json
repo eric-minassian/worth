@@ -1,0 +1,19 @@
+{
+  "name": "@worth/core",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@worth/db": "workspace:*",
+    "@worth/domain": "workspace:*",
+    "@worth/importers": "workspace:*",
+    "@worth/sync": "workspace:*",
+    "effect": "beta"
+  }
+}

@@ -43,12 +43,6 @@ app.whenReady().then(() => {
   ipcMain.handle(RPC_CHANNEL, async (_event, request: unknown) => handleRpc(request))
 
   app.on("before-quit", () => {
-    void runtime.runPromise(
-      Effect.gen(function* () {
-        const updater = yield* Updater
-        updater.dispose()
-      }),
-    )
     void runtime.dispose()
   })
 

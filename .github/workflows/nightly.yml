@@ -1,9 +1,8 @@
 name: Nightly
 
-# Runs on every push to main. Builds Worth and publishes a prerelease to
-# GitHub Releases. Version string is `X.Y.Z-nightly.<YYYYMMDDHHmm>.<shortsha>`,
-# which electron-builder routes to `nightly.yml` — clients on the "nightly"
-# channel pick it up from there.
+# Runs on every push to main. Builds macOS arm64 DMG and publishes a
+# prerelease on GitHub. The renderer's "nightly" channel lists any release
+# flagged as prerelease with a `-nightly.` version tag.
 
 on:
   push:
@@ -19,18 +18,8 @@ concurrency:
 
 jobs:
   build:
-    name: Build ${{ matrix.os }}
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - os: macos-14
-            platform: mac
-          - os: windows-latest
-            platform: win
-          - os: ubuntu-latest
-            platform: linux
-    runs-on: ${{ matrix.os }}
+    name: Build macOS
+    runs-on: macos-14
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
@@ -49,7 +38,6 @@ jobs:
 
       - name: Compute nightly version
         id: version
-        shell: bash
         run: |
           v=$(node scripts/set-version.mjs --nightly)
           echo "version=${v}" >> "$GITHUB_OUTPUT"
@@ -61,12 +49,7 @@ jobs:
       - name: Lint
         run: pnpm lint
 
-      - name: Test (Linux)
-        if: matrix.platform == 'linux'
-        run: xvfb-run --auto-servernum pnpm test
-
-      - name: Test (${{ matrix.platform }})
-        if: matrix.platform != 'linux'
+      - name: Test
         run: pnpm test
 
       - name: Build renderer/main/preload
@@ -76,4 +59,6 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           CSC_IDENTITY_AUTO_DISCOVERY: "false"
-        run: pnpm --filter @worth/electron exec electron-builder --publish always --config.releaseType=prerelease
+        # `--config.publish.releaseType=prerelease` marks the GitHub release as
+        # prerelease, which is how the renderer separates nightly from stable.
+        run: pnpm --filter @worth/electron exec electron-builder --publish always --config.publish.releaseType=prerelease

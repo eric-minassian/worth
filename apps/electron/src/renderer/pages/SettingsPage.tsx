@@ -1,13 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import { queryOptions } from "@tanstack/react-query"
-import {
-  CheckCircle2,
-  Download,
-  ExternalLink,
-  RefreshCw,
-  RotateCcw,
-  Upload,
-} from "lucide-react"
+import { Download, ExternalLink, RefreshCw, RotateCcw, Upload } from "lucide-react"
 import { useEffect, useState } from "react"
 import type { UpdateChannel, UpdaterState } from "@worth/ipc"
 import {
@@ -49,8 +42,6 @@ export const SettingsPage = () => {
 
   const invalidateAll = () => qc.invalidateQueries()
 
-  // Subscribe to main-process updater events so we reflect download progress
-  // and state transitions without polling.
   useEffect(() => {
     const unsubscribe = window.worth.onUpdateEvent((raw) => {
       qc.setQueryData<UpdaterState>(updaterQuery.queryKey, raw as UpdaterState)
@@ -111,16 +102,6 @@ export const SettingsPage = () => {
     mutationFn: () => callCommand("updater.checkForUpdates", {}),
     onSuccess: (result) =>
       qc.setQueryData<UpdaterState>(updaterQuery.queryKey, result),
-  })
-
-  const downloadMutation = useMutation({
-    mutationFn: () => callCommand("updater.downloadUpdate", {}),
-    onSuccess: (result) =>
-      qc.setQueryData<UpdaterState>(updaterQuery.queryKey, result),
-  })
-
-  const installMutation = useMutation({
-    mutationFn: () => callCommand("updater.quitAndInstall", {}),
   })
 
   const setChannelMutation = useMutation({
@@ -218,22 +199,17 @@ export const SettingsPage = () => {
           <CardTitle className="text-base">Updates</CardTitle>
           <CardDescription>
             Stable tracks tagged releases. Nightly updates on every commit to main — useful for
-            trying out in-progress features, but occasionally rough.
+            trying out in-progress features, but occasionally rough. Worth is not code-signed,
+            so updates open the GitHub release page for a manual drag-into-Applications swap.
           </CardDescription>
         </CardHeader>
         <CardContent className="flex flex-col gap-4">
           <UpdaterPanel
             state={updater.data ?? null}
             onCheck={() => checkUpdatesMutation.mutate()}
-            onDownload={() => downloadMutation.mutate()}
-            onInstall={() => installMutation.mutate()}
             onOpenRelease={() => openReleaseMutation.mutate()}
             onChannelChange={(c) => setChannelMutation.mutate(c)}
-            busy={
-              checkUpdatesMutation.isPending ||
-              downloadMutation.isPending ||
-              setChannelMutation.isPending
-            }
+            busy={checkUpdatesMutation.isPending || setChannelMutation.isPending}
           />
         </CardContent>
       </Card>
@@ -245,8 +221,6 @@ interface UpdaterPanelProps {
   readonly state: UpdaterState | null
   readonly busy: boolean
   readonly onCheck: () => void
-  readonly onDownload: () => void
-  readonly onInstall: () => void
   readonly onOpenRelease: () => void
   readonly onChannelChange: (channel: UpdateChannel) => void
 }
@@ -255,19 +229,12 @@ const UpdaterPanel = ({
   state,
   busy,
   onCheck,
-  onDownload,
-  onInstall,
   onOpenRelease,
   onChannelChange,
 }: UpdaterPanelProps) => {
   if (!state) {
-    return (
-      <div className="text-sm text-muted-foreground">Loading updater status…</div>
-    )
+    return <div className="text-sm text-muted-foreground">Loading updater status…</div>
   }
-
-  const platformLabel =
-    state.platform === "mac" ? "macOS" : state.platform === "win" ? "Windows" : "Linux"
 
   return (
     <div className="flex flex-col gap-4">
@@ -291,49 +258,38 @@ const UpdaterPanel = ({
         <div>
           <div className="text-xs uppercase text-muted-foreground">Installed version</div>
           <div className="mt-1 font-mono text-sm break-all">{state.currentVersion}</div>
-          <div className="mt-1 text-xs text-muted-foreground">{platformLabel}</div>
         </div>
       </div>
 
       <StatusLine state={state} />
 
       <div className="flex flex-wrap gap-3">
-        {state.status === "idle" || state.status === "not-available" || state.status === "error" ? (
+        {state.status === "idle" ||
+        state.status === "not-available" ||
+        state.status === "error" ? (
           <Button onClick={onCheck} disabled={busy}>
             <RefreshCw /> {busy ? "Checking…" : "Check for updates"}
           </Button>
         ) : null}
 
         {state.status === "available" ? (
-          state.canAutoInstall ? (
-            <Button onClick={onDownload} disabled={busy}>
-              <Download /> Download {state.nextVersion}
-            </Button>
-          ) : (
-            <Button onClick={onDownload} disabled={busy}>
-              <ExternalLink /> Open {state.nextVersion} on GitHub
-            </Button>
-          )
-        ) : null}
-
-        {state.status === "ready" ? (
-          <Button onClick={onInstall}>
-            <CheckCircle2 /> Restart and install {state.nextVersion}
+          <Button onClick={onOpenRelease}>
+            <ExternalLink /> Open {state.nextVersion} on GitHub
           </Button>
         ) : null}
 
-        {state.status !== "downloading" && (state.status === "available" || state.status === "not-available" || state.status === "ready") ? (
+        {state.status === "available" || state.status === "not-available" ? (
           <Button variant="secondary" onClick={onOpenRelease}>
             <ExternalLink /> View release notes
           </Button>
         ) : null}
       </div>
 
-      {state.status === "available" && !state.canAutoInstall ? (
+      {state.status === "available" ? (
         <p className="text-xs text-muted-foreground">
-          Automatic install is disabled on {platformLabel} because this build is unsigned.
-          The download link opens the GitHub release — drag the new app into Applications to
-          replace the old one.
+          Opening the release page downloads the DMG. Drag the new{" "}
+          <span className="font-mono">Worth.app</span> into Applications, replacing the old
+          one.
         </p>
       ) : null}
     </div>
@@ -363,51 +319,11 @@ const StatusLine = ({ state }: { readonly state: UpdaterState }) => {
           <span className="font-mono">{state.nextVersion}</span>
         </div>
       )
-    case "downloading": {
-      const pct = Math.max(0, Math.min(100, state.percent))
-      return (
-        <div className="flex flex-col gap-2">
-          <div className="text-sm">
-            Downloading <span className="font-mono">{state.nextVersion}</span> —{" "}
-            {pct.toFixed(0)}%
-          </div>
-          <div className="h-2 overflow-hidden rounded-full bg-muted">
-            <div
-              className="h-full bg-primary transition-[width] duration-150"
-              style={{ width: `${pct.toString()}%` }}
-            />
-          </div>
-          <div className="text-xs text-muted-foreground">
-            {formatBytes(state.transferred)} / {formatBytes(state.total)} ·{" "}
-            {formatBytes(state.bytesPerSecond)}/s
-          </div>
-        </div>
-      )
-    }
-    case "ready":
-      return (
-        <div className="text-sm text-emerald-500">
-          <span className="font-mono">{state.nextVersion}</span> downloaded. Restart to
-          install.
-        </div>
-      )
     case "error":
       return (
-        <div className="text-sm text-destructive">Update failed: {state.message}</div>
+        <div className="text-sm text-destructive">Update check failed: {state.message}</div>
       )
   }
-}
-
-const formatBytes = (n: number): string => {
-  if (!Number.isFinite(n) || n <= 0) return "0 B"
-  const units = ["B", "KB", "MB", "GB"]
-  let i = 0
-  let v = n
-  while (v >= 1024 && i < units.length - 1) {
-    v /= 1024
-    i++
-  }
-  return `${v.toFixed(v < 10 ? 1 : 0)} ${units[i] ?? "B"}`
 }
 
 interface StatProps {
@@ -420,9 +336,7 @@ const Stat = ({ label, value, mono = false }: StatProps) => (
   <Card>
     <CardHeader>
       <CardDescription>{label}</CardDescription>
-      <CardTitle
-        className={mono ? "font-mono text-sm break-all" : "text-2xl"}
-      >
+      <CardTitle className={mono ? "font-mono text-sm break-all" : "text-2xl"}>
         {value}
       </CardTitle>
     </CardHeader>

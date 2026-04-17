@@ -21,12 +21,6 @@ asarUnpack:
   - "**/bindings/**"
   - "**/file-uri-to-path/**"
 
-# Single-channel per-build. The CI sets package.json version:
-#   stable tag  → "1.2.3"        → publishes latest.yml  (stable channel)
-#   nightly     → "X.Y.Z-nightly.<ts>.<sha>" → publishes nightly.yml
-# electron-builder parses the prerelease tag and routes the feed file.
-generateUpdatesFilesForAllChannels: false
-
 mac:
   category: public.app-category.finance
   target:
@@ -34,31 +28,15 @@ mac:
       arch:
         - arm64
   # App is not code-signed — Apple Developer Program ($99/yr) is not used.
-  # Explicitly disable signing so electron-builder doesn't try and fail.
   identity: null
-  # We do not distribute a notarized build; omit entitlements/hardened runtime.
   gatekeeperAssess: false
 
-win:
-  target:
-    - target: nsis
-      arch:
-        - x64
-
-nsis:
-  oneClick: false
-  allowToChangeInstallationDirectory: true
-  perMachine: false
-
-linux:
-  category: Office
-  target:
-    - target: AppImage
-      arch:
-        - x64
-
+# Each build sets package.json version:
+#   stable tag → "X.Y.Z"                        → GitHub release (full)
+#   nightly    → "X.Y.Z-nightly.<ts>.<sha>"    → GitHub prerelease
+# The renderer compares versions directly via the GitHub Releases API, so the
+# release's prerelease flag is what partitions stable vs nightly channels.
 publish:
   provider: github
   owner: eric-minassian
   repo: worth
-  releaseType: release

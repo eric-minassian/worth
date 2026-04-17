@@ -13,7 +13,7 @@ concurrency:
 jobs:
   verify:
     name: Verify
-    runs-on: ubuntu-latest
+    runs-on: macos-14
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
@@ -34,7 +34,5 @@ jobs:
       - name: Lint
         run: pnpm lint
 
-      # Tests drive Electron's Node (ELECTRON_RUN_AS_NODE=1) for the native
-      # better-sqlite3 ABI — xvfb-run is required so Electron can initialise.
       - name: Test
-        run: xvfb-run --auto-servernum pnpm test
+        run: pnpm test

@@ -197,18 +197,6 @@ export const handlers: Handlers = {
       return yield* Effect.promise(() => updater.checkForUpdates())
     }),
 
-  "updater.downloadUpdate": () =>
-    Effect.gen(function* () {
-      const updater = yield* Updater
-      return yield* Effect.promise(() => updater.downloadUpdate())
-    }),
-
-  "updater.quitAndInstall": () =>
-    Effect.gen(function* () {
-      const updater = yield* Updater
-      return { ok: updater.quitAndInstall() }
-    }),
-
   "updater.setChannel": (input) =>
     Effect.gen(function* () {
       const updater = yield* Updater

@@ -235,70 +235,40 @@ export const UpdateChannel = Schema.Literals(["stable", "nightly"])
 export type UpdateChannel = Schema.Schema.Type<typeof UpdateChannel>
 
 /**
- * Snapshot of the main-process updater's state. The renderer reads this on
- * load and subscribes to `UPDATE_EVENT_CHANNEL` to stay in sync. Shape is a
- * tagged union keyed on `status` so the renderer can render each case cleanly.
+ * Snapshot of the main-process updater's state. Worth is macOS-only and
+ * unsigned — we cannot install in place, so the flow is: detect a newer
+ * release on GitHub, then open the release page for a manual DMG swap.
  */
 export const UpdaterState = Schema.Union([
   Schema.Struct({
     status: Schema.Literal("idle"),
     currentVersion: Schema.String,
     channel: UpdateChannel,
-    platform: Schema.Literals(["mac", "win", "linux"]),
-    canAutoInstall: Schema.Boolean,
     lastCheckedAt: Schema.NullOr(Schema.Number),
   }),
   Schema.Struct({
     status: Schema.Literal("checking"),
     currentVersion: Schema.String,
     channel: UpdateChannel,
-    platform: Schema.Literals(["mac", "win", "linux"]),
-    canAutoInstall: Schema.Boolean,
   }),
   Schema.Struct({
     status: Schema.Literal("not-available"),
     currentVersion: Schema.String,
     channel: UpdateChannel,
-    platform: Schema.Literals(["mac", "win", "linux"]),
-    canAutoInstall: Schema.Boolean,
     lastCheckedAt: Schema.Number,
   }),
   Schema.Struct({
     status: Schema.Literal("available"),
     currentVersion: Schema.String,
     channel: UpdateChannel,
-    platform: Schema.Literals(["mac", "win", "linux"]),
-    canAutoInstall: Schema.Boolean,
     nextVersion: Schema.String,
     releaseUrl: Schema.NullOr(Schema.String),
     releaseNotes: Schema.NullOr(Schema.String),
   }),
   Schema.Struct({
-    status: Schema.Literal("downloading"),
-    currentVersion: Schema.String,
-    channel: UpdateChannel,
-    platform: Schema.Literals(["mac", "win", "linux"]),
-    canAutoInstall: Schema.Boolean,
-    nextVersion: Schema.String,
-    percent: Schema.Number,
-    bytesPerSecond: Schema.Number,
-    transferred: Schema.Number,
-    total: Schema.Number,
-  }),
-  Schema.Struct({
-    status: Schema.Literal("ready"),
-    currentVersion: Schema.String,
-    channel: UpdateChannel,
-    platform: Schema.Literals(["mac", "win", "linux"]),
-    canAutoInstall: Schema.Boolean,
-    nextVersion: Schema.String,
-  }),
-  Schema.Struct({
     status: Schema.Literal("error"),
     currentVersion: Schema.String,
     channel: UpdateChannel,
-    platform: Schema.Literals(["mac", "win", "linux"]),
-    canAutoInstall: Schema.Boolean,
     message: Schema.String,
   }),
 ])
@@ -314,18 +284,6 @@ export const UpdaterCheckForUpdatesCommand = defineCommand(
   "updater.checkForUpdates",
   Schema.Struct({}),
   UpdaterState,
-)
-
-export const UpdaterDownloadUpdateCommand = defineCommand(
-  "updater.downloadUpdate",
-  Schema.Struct({}),
-  UpdaterState,
-)
-
-export const UpdaterQuitAndInstallCommand = defineCommand(
-  "updater.quitAndInstall",
-  Schema.Struct({}),
-  Schema.Struct({ ok: Schema.Boolean }),
 )
 
 export const UpdaterSetChannelCommand = defineCommand(
@@ -363,8 +321,6 @@ export const Commands = {
   "system.rebuildProjections": SystemRebuildCommand,
   "updater.getState": UpdaterGetStateCommand,
   "updater.checkForUpdates": UpdaterCheckForUpdatesCommand,
-  "updater.downloadUpdate": UpdaterDownloadUpdateCommand,
-  "updater.quitAndInstall": UpdaterQuitAndInstallCommand,
   "updater.setChannel": UpdaterSetChannelCommand,
   "updater.openReleasePage": UpdaterOpenReleasePageCommand,
 } as const

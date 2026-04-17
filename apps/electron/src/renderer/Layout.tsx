@@ -1,5 +1,5 @@
 import { Link } from "@tanstack/react-router"
-import { LayoutDashboard, ListOrdered, Tag, Wallet } from "lucide-react"
+import { LayoutDashboard, ListOrdered, Settings, Tag, Wallet } from "lucide-react"
 import type { ReactNode } from "react"
 import { cn } from "@worth/ui"
 
@@ -8,7 +8,7 @@ interface LayoutProps {
 }
 
 interface NavItem {
-  readonly to: "/" | "/accounts" | "/transactions" | "/categories"
+  readonly to: "/" | "/accounts" | "/transactions" | "/categories" | "/settings"
   readonly label: string
   readonly Icon: typeof LayoutDashboard
 }
@@ -18,6 +18,7 @@ const navItems: readonly NavItem[] = [
   { to: "/accounts", label: "Accounts", Icon: Wallet },
   { to: "/transactions", label: "Transactions", Icon: ListOrdered },
   { to: "/categories", label: "Categories", Icon: Tag },
+  { to: "/settings", label: "Settings", Icon: Settings },
 ]
 
 export const Layout = ({ children }: LayoutProps) => (

@@ -89,7 +89,7 @@ export const applyEvent = (db: DrizzleClient, event: DomainEvent): void => {
 
     case "TransactionCategorized":
       db.update(schema.transactions)
-        .set({ categoryId: event.categoryId, updatedAt: Date.now() })
+        .set({ categoryId: event.categoryId, updatedAt: event.at })
         .where(eq(schema.transactions.id, event.id))
         .run()
       return

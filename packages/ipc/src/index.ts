@@ -6,6 +6,8 @@ import {
   Category,
   CategoryId,
   CurrencyCode,
+  DeviceId,
+  Hlc,
   Money,
   Transaction,
   TransactionId,
@@ -173,6 +175,54 @@ export const ImportCommitCommand = defineCommand(
   }),
 )
 
+// -- System commands --------------------------------------------------------
+
+export const SystemStatsCommand = defineCommand(
+  "system.stats",
+  Schema.Struct({}),
+  Schema.Struct({
+    deviceId: DeviceId,
+    eventCount: Schema.Number,
+    accountCount: Schema.Number,
+    transactionCount: Schema.Number,
+    categoryCount: Schema.Number,
+    lastHlc: Schema.NullOr(Hlc),
+  }),
+)
+
+export const SystemExportCommand = defineCommand(
+  "system.export",
+  Schema.Struct({}),
+  Schema.Union([
+    Schema.Struct({ cancelled: Schema.Literal(true) }),
+    Schema.Struct({
+      cancelled: Schema.Literal(false),
+      path: Schema.String,
+      eventCount: Schema.Number,
+    }),
+  ]),
+)
+
+export const SystemImportCommand = defineCommand(
+  "system.import",
+  Schema.Struct({}),
+  Schema.Union([
+    Schema.Struct({ cancelled: Schema.Literal(true) }),
+    Schema.Struct({
+      cancelled: Schema.Literal(false),
+      path: Schema.String,
+      accepted: Schema.Number,
+      skipped: Schema.Number,
+    }),
+  ]),
+)
+
+export const SystemRebuildCommand = defineCommand(
+  "system.rebuildProjections",
+  Schema.Struct({}),
+  Schema.Struct({ replayed: Schema.Number }),
+)
+
 // -- Registry ---------------------------------------------------------------
 
 export const Commands = {
@@ -190,6 +240,10 @@ export const Commands = {
   "transaction.delete": TransactionDeleteCommand,
   "transaction.import.preview": ImportPreviewCommand,
   "transaction.import.commit": ImportCommitCommand,
+  "system.stats": SystemStatsCommand,
+  "system.export": SystemExportCommand,
+  "system.import": SystemImportCommand,
+  "system.rebuildProjections": SystemRebuildCommand,
 } as const
 
 export type Commands = typeof Commands

@@ -1,11 +1,15 @@
-import { Effect } from "effect"
+import { readFile, writeFile } from "node:fs/promises"
+import { dialog } from "electron"
+import { Effect, Schema } from "effect"
 import {
   AccountService,
   CategoryService,
   ImportService,
+  SystemService,
   TransactionService,
 } from "@worth/core"
 import type { CommandKind, InputOf, OutputOf } from "@worth/ipc"
+import { ExportFile } from "@worth/sync"
 
 /**
  * Maps each command kind to an effect that produces its output from its input.
@@ -16,10 +20,12 @@ export type CommandHandler<K extends CommandKind> = (
 ) => Effect.Effect<
   OutputOf<K>,
   unknown,
-  AccountService | CategoryService | ImportService | TransactionService
+  AccountService | CategoryService | ImportService | SystemService | TransactionService
 >
 
 export type Handlers = { readonly [K in CommandKind]: CommandHandler<K> }
+
+const decodeExport = Schema.decodeUnknownResult(ExportFile)
 
 export const handlers: Handlers = {
   ping: (input) =>
@@ -104,5 +110,72 @@ export const handlers: Handlers = {
     Effect.gen(function* () {
       const svc = yield* ImportService
       return yield* svc.commit(input)
+    }),
+
+  "system.stats": () =>
+    Effect.gen(function* () {
+      const svc = yield* SystemService
+      return yield* svc.stats
+    }),
+
+  "system.export": () =>
+    Effect.gen(function* () {
+      const result = yield* Effect.tryPromise(() =>
+        dialog.showSaveDialog({
+          title: "Export event log",
+          defaultPath: `worth-events-${new Date().toISOString().slice(0, 10)}.json`,
+          filters: [{ name: "JSON", extensions: ["json"] }],
+        }),
+      )
+      if (result.canceled || !result.filePath) {
+        return { cancelled: true as const }
+      }
+
+      const svc = yield* SystemService
+      const file = yield* svc.exportLog
+      yield* Effect.tryPromise(() =>
+        writeFile(result.filePath, JSON.stringify(file, null, 2), "utf8"),
+      )
+
+      return {
+        cancelled: false as const,
+        path: result.filePath,
+        eventCount: file.events.length,
+      }
+    }),
+
+  "system.import": () =>
+    Effect.gen(function* () {
+      const result = yield* Effect.tryPromise(() =>
+        dialog.showOpenDialog({
+          title: "Import event log",
+          properties: ["openFile"],
+          filters: [{ name: "JSON", extensions: ["json"] }],
+        }),
+      )
+      const filePath = result.filePaths[0]
+      if (result.canceled || !filePath) {
+        return { cancelled: true as const }
+      }
+
+      const text = yield* Effect.tryPromise(() => readFile(filePath, "utf8"))
+      const parsed = JSON.parse(text) as unknown
+      const decoded = decodeExport(parsed)
+      if (decoded._tag === "Failure") {
+        return yield* Effect.fail(
+          new Error(`Not a valid Worth export file: ${decoded.failure.toString()}`),
+        )
+      }
+
+      const svc = yield* SystemService
+      const { accepted, skipped } = yield* svc.importLog(decoded.success)
+
+      return { cancelled: false as const, path: filePath, accepted, skipped }
+    }),
+
+  "system.rebuildProjections": () =>
+    Effect.gen(function* () {
+      const svc = yield* SystemService
+      return yield* svc.rebuildProjections
     }),
 }

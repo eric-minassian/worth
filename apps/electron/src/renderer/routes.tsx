@@ -4,6 +4,7 @@ import { Dashboard } from "./pages/Dashboard"
 import { AccountsPage } from "./pages/AccountsPage"
 import { TransactionsPage } from "./pages/TransactionsPage"
 import { CategoriesPage } from "./pages/CategoriesPage"
+import { SettingsPage } from "./pages/SettingsPage"
 
 const rootRoute = createRootRoute({
   component: () => (
@@ -37,11 +38,18 @@ const categoriesRoute = createRoute({
   component: CategoriesPage,
 })
 
+const settingsRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/settings",
+  component: SettingsPage,
+})
+
 const routeTree = rootRoute.addChildren([
   indexRoute,
   accountsRoute,
   transactionsRoute,
   categoriesRoute,
+  settingsRoute,
 ])
 
 export const router = createRouter({ routeTree, defaultPreload: "intent" })

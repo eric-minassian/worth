@@ -20,17 +20,25 @@ export interface HlcClockConfig {
   readonly deviceId: DeviceId
   readonly initialHlc?: Hlc | undefined
   readonly now?: () => number
+  /**
+   * Called synchronously each time the clock advances (either via next() or
+   * observe()). The Electron runtime uses this to persist the latest HLC so
+   * the clock survives restarts.
+   */
+  readonly onAdvance?: (hlc: Hlc) => void
 }
 
 /** Build a concrete HlcClock service implementation without the Layer wrapper. */
 export const makeHlcClock = (config: HlcClockConfig): HlcClockShape => {
   const now = config.now ?? (() => Date.now())
+  const onAdvance = config.onAdvance
   let current: HLC.HlcParts | null =
     config.initialHlc !== undefined ? HLC.parse(config.initialHlc) : null
 
   const next = Effect.sync(() => {
     const hlc = HLC.tick(now(), current, config.deviceId)
     current = HLC.parse(hlc)
+    onAdvance?.(hlc)
     return hlc
   })
 
@@ -39,6 +47,7 @@ export const makeHlcClock = (config: HlcClockConfig): HlcClockShape => {
       const parts = HLC.parse(remote)
       const hlc = HLC.recv(now(), parts, current, config.deviceId)
       current = HLC.parse(hlc)
+      onAdvance?.(hlc)
     })
 
   return { deviceId: config.deviceId, next, observe }

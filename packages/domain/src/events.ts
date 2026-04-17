@@ -53,6 +53,7 @@ export type TransactionImported = Schema.Schema.Type<typeof TransactionImported>
 export const TransactionCategorized = Schema.TaggedStruct("TransactionCategorized", {
   id: TransactionId,
   categoryId: Schema.NullOr(CategoryId),
+  at: Schema.Number,
 })
 export type TransactionCategorized = Schema.Schema.Type<typeof TransactionCategorized>
 

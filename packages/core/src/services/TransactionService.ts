@@ -147,6 +147,7 @@ export const TransactionServiceLive = Layer.effect(TransactionService)(
           _tag: "TransactionCategorized",
           id: input.id,
           categoryId: input.categoryId,
+          at: Date.now(),
         })
       })
 

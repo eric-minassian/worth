@@ -26,6 +26,7 @@ export {
   CardHeader,
   CardTitle,
 } from "./components/ui/card"
+export { Checkbox } from "./components/ui/checkbox"
 export {
   Combobox,
   ComboboxChip,

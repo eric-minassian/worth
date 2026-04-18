@@ -2,6 +2,7 @@ import { and, eq, isNotNull } from "drizzle-orm"
 import type { DrizzleClient } from "@worth/db"
 import { schema } from "@worth/db"
 import type { DomainEvent } from "@worth/domain"
+import { hasContentFingerprint } from "./fingerprint"
 
 /**
  * Apply a single event to the projection tables. Called inside the same
@@ -38,6 +39,17 @@ export const applyEvent = (db: DrizzleClient, event: DomainEvent): void => {
         .run()
       return
 
+    case "AccountExternalKeyLinked":
+      db.insert(schema.accountExternalKeys)
+        .values({
+          externalKey: event.externalKey,
+          accountId: event.id,
+          linkedAt: event.at,
+        })
+        .onConflictDoNothing()
+        .run()
+      return
+
     case "CategoryCreated":
       db.insert(schema.categories)
         .values({
@@ -67,6 +79,20 @@ export const applyEvent = (db: DrizzleClient, event: DomainEvent): void => {
           .limit(1)
           .all()
         if (existing.length > 0) return
+      }
+      // Gated to importHash !== null so manual TransactionService.create
+      // retains its "duplicate-looking rows are allowed" semantics.
+      if (
+        event.importHash !== null &&
+        hasContentFingerprint(
+          db,
+          event.accountId,
+          event.postedAt,
+          event.amount.minor,
+          event.amount.currency,
+        )
+      ) {
+        return
       }
       db.insert(schema.transactions)
         .values({
@@ -115,5 +141,19 @@ export const applyEvent = (db: DrizzleClient, event: DomainEvent): void => {
     case "TransactionDeleted":
       db.delete(schema.transactions).where(eq(schema.transactions.id, event.id)).run()
       return
+
+    case "DuplicateGroupDismissed": {
+      const sorted = [...event.memberIds].sort()
+      const key = sorted.join(",")
+      db.insert(schema.duplicateDismissals)
+        .values({
+          memberKey: key,
+          memberIds: JSON.stringify(sorted),
+          dismissedAt: event.at,
+        })
+        .onConflictDoNothing()
+        .run()
+      return
+    }
   }
 }

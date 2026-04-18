@@ -120,6 +120,24 @@ export const handlers: Handlers = {
       yield* svc.delete(input.id)
     }),
 
+  "transaction.deleteMany": (input) =>
+    Effect.gen(function* () {
+      const svc = yield* TransactionService
+      return yield* svc.deleteMany(input.ids)
+    }),
+
+  "transaction.listDuplicates": (input) =>
+    Effect.gen(function* () {
+      const svc = yield* TransactionService
+      return yield* svc.listDuplicateGroups(input)
+    }),
+
+  "transaction.dismissDuplicateGroup": (input) =>
+    Effect.gen(function* () {
+      const svc = yield* TransactionService
+      yield* svc.dismissDuplicateGroup(input.memberIds)
+    }),
+
   "transaction.import.preview": (input) =>
     Effect.gen(function* () {
       const svc = yield* ImportService
@@ -130,6 +148,18 @@ export const handlers: Handlers = {
     Effect.gen(function* () {
       const svc = yield* ImportService
       return yield* svc.commit(input)
+    }),
+
+  "transaction.import.ofxPreview": (input) =>
+    Effect.gen(function* () {
+      const svc = yield* ImportService
+      return yield* svc.ofxPreview(input)
+    }),
+
+  "transaction.import.ofxCommit": (input) =>
+    Effect.gen(function* () {
+      const svc = yield* ImportService
+      return yield* svc.ofxCommit(input)
     }),
 
   "system.stats": () =>

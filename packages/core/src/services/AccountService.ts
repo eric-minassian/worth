@@ -22,6 +22,11 @@ export interface RenameAccountInput {
   readonly name: string
 }
 
+export interface LinkExternalKeyInput {
+  readonly accountId: AccountId
+  readonly externalKey: string
+}
+
 export class AccountService extends Context.Service<
   AccountService,
   {
@@ -30,6 +35,8 @@ export class AccountService extends Context.Service<
     readonly get: (id: AccountId) => Effect.Effect<Account, NotFound>
     readonly rename: (input: RenameAccountInput) => Effect.Effect<void, NotFound>
     readonly archive: (id: AccountId) => Effect.Effect<void, NotFound>
+    readonly findByExternalKey: (key: string) => Effect.Effect<Account | null>
+    readonly linkExternalKey: (input: LinkExternalKeyInput) => Effect.Effect<void, NotFound>
   }
 >()("@worth/core/AccountService") {}
 
@@ -107,6 +114,29 @@ export const AccountServiceLive = Layer.effect(AccountService)(
         yield* log.append({ _tag: "AccountArchived", id, at: Date.now() })
       })
 
-    return { create, list, get, rename, archive }
+    const findByExternalKey = (key: string): Effect.Effect<Account | null> =>
+      Effect.sync(() => {
+        const row = db.drizzle
+          .select({ accountId: schema.accountExternalKeys.accountId })
+          .from(schema.accountExternalKeys)
+          .where(eq(schema.accountExternalKeys.externalKey, key))
+          .get()
+        if (!row) return null
+        return selectById(row.accountId as AccountId)
+      })
+
+    const linkExternalKey = (input: LinkExternalKeyInput): Effect.Effect<void, NotFound> =>
+      Effect.gen(function* () {
+        if (!selectById(input.accountId))
+          return yield* Effect.fail(new NotFound({ entity: "Account", id: input.accountId }))
+        yield* log.append({
+          _tag: "AccountExternalKeyLinked",
+          id: input.accountId,
+          externalKey: input.externalKey,
+          at: Date.now(),
+        })
+      })
+
+    return { create, list, get, rename, archive, findByExternalKey, linkExternalKey }
   }),
 )

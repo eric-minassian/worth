@@ -1,5 +1,6 @@
 export * from "./accounts"
 export * from "./categories"
+export * from "./duplicateDismissals"
 export * from "./events"
 export * from "./meta"
 export * from "./transactions"

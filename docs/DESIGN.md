@@ -445,15 +445,15 @@ An importer produces **events**, not rows. It never writes to the DB directly. T
 2. Filters events whose `importHash` already exists in the projection (dedup).
 3. Appends the remaining events transactionally.
 
-### 13.2 v1 importer
+### 13.2 v1 importers
 
-`csv.generic` with configurable column mapping (date / payee / amount / memo). Chase/Amex/etc. become presets on top.
+- **`csv.generic`** — configurable column mapping (date / payee / amount / memo). Chase/Amex/etc. become presets on top.
+- **`ofx` / `qfx`** — typed institution-provided format used by Fidelity, Vanguard, Amex, Bank of America. Hand-rolled parser (no deps) handles OFX 1.x SGML and OFX 2.x XML. Dedup key is `ofx|<accountId>|<FITID>` — the bank's stable transaction identifier, so re-importing the same file or an overlapping date range is always a no-op. `BANKID`+`ACCTID` is captured as an `externalKey` and persisted via `AccountExternalKeyLinked` so subsequent imports from the same source auto-route to the right Worth account. Banking transactions only (`<BANKTRANLIST>`); investment sections (`<INVTRANLIST>`) are counted and surfaced in the UI as "coming later" — they land with M6.
 
 ### 13.3 Future importers
 
-- `ofx` / `qfx` parsers
-- `plaid` (needs a proxy through the self-hosted server; Plaid keys must not live on the client)
-- Brokerage statements, which will emit future `InvestmentTransactionImported` events the same way
+- `plaid` / `simplefin` (needs a proxy through the self-hosted server; third-party keys must not live on the client)
+- Brokerage statements, which will emit future `InvestmentTransactionImported` events the same way — the OFX parser already reports the investment sections it currently skips, so wiring those in is additive
 
 Investments are additive: new event types, new projection tables, no churn on existing code.
 

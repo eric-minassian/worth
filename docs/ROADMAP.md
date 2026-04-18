@@ -28,6 +28,7 @@ These are load-bearing. Any future work should respect them.
 ### Functional surface (v1)
 - Accounts, categories, transactions — CRUD via Effect services. Every mutation is a domain event; projections update in the same DB transaction.
 - CSV import with header-based column-mapping suggestions, parens/symbol-aware amount parsing, dedup by `(accountId, importHash)`.
+- OFX/QFX import (Fidelity, Vanguard, Amex, BofA) with FITID-based dedup and auto-routing on repeat imports via `AccountExternalKeyLinked`. Banking only — investment sections are detected and deferred to M6.
 - Settings page: device id, last HLC, event + projection counts, export / import event log, rebuild projections.
 - Native save/open dialogs (Electron `dialog.*`) for the export/import backup flow.
 
@@ -103,7 +104,7 @@ New domain concepts (each becomes events + projection tables):
 
 Requirements:
 - Additive only — existing `Account` / `Transaction` flows must keep working exactly as they do today.
-- Importers for brokerage CSVs and OFX/QFX. Plaid integration is a separate task and must route through the self-hosted server (Plaid keys never live on the client).
+- Extend the existing OFX parser to handle investment sections (`<INVSTMTRS>` / `<INVTRANLIST>`) — it already reports and skips them today. Separate importer for brokerage CSVs if OFX coverage is insufficient. Plaid integration is a separate task and must route through the self-hosted server (Plaid keys never live on the client).
 - External price data source — TBD. Could be Yahoo Finance scrape, IEX, or manual entry. Whatever it is, the PriceQuote event type is the internal truth; the source is just a feeder.
 
 ### M7+ — Analysis & workflows

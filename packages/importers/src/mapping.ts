@@ -1,4 +1,5 @@
 import type { CurrencyCode, Money } from "@worth/domain"
+import { parseAmount } from "./money"
 
 export type ColumnRole = "date" | "payee" | "amount" | "memo" | "skip"
 
@@ -45,42 +46,26 @@ export const suggestMapping = (headers: readonly string[]): ColumnMapping => {
   return mapping
 }
 
-/** Parse a date cell, trying ISO, MM/DD/YYYY, and DD/MM/YYYY. */
+/**
+ * Parse a date cell to UTC midnight. Anchoring at UTC midnight — not local —
+ * is what lets a CSV row and an OFX row for the same calendar day hash to the
+ * same `postedAt`, which is what the cross-format content fingerprint relies on.
+ */
 const parseDate = (value: string): number | null => {
   const trimmed = value.trim()
   if (trimmed === "") return null
-  const iso = Date.parse(trimmed)
-  if (!Number.isNaN(iso)) return iso
+  const iso = trimmed.match(/^(\d{4})-(\d{1,2})-(\d{1,2})(?:[T ].*)?$/)
+  if (iso) {
+    const [, y = "", m = "", d = ""] = iso
+    return Date.UTC(Number(y), Number(m) - 1, Number(d))
+  }
   const slash = trimmed.match(/^(\d{1,2})\/(\d{1,2})\/(\d{2,4})$/)
   if (slash) {
     const [, a = "", b = "", c = ""] = slash
     const year = c.length === 2 ? 2000 + Number(c) : Number(c)
-    // Assume MM/DD/YYYY (US convention) — banks vary; users can fix in UI
-    const mdy = new Date(year, Number(a) - 1, Number(b)).getTime()
-    if (!Number.isNaN(mdy)) return mdy
+    return Date.UTC(year, Number(a) - 1, Number(b))
   }
   return null
-}
-
-/** Parse an amount cell. Handles `$`, thousand separators, parens for negatives. */
-const parseAmount = (value: string): bigint | null => {
-  let s = value.trim()
-  if (s === "") return null
-  let negative = false
-  if (s.startsWith("(") && s.endsWith(")")) {
-    negative = true
-    s = s.slice(1, -1)
-  }
-  if (s.startsWith("-")) {
-    negative = !negative
-    s = s.slice(1)
-  }
-  s = s.replace(/[$,\s]/g, "")
-  if (!/^\d+(\.\d{1,4})?$/.test(s)) return null
-  const [whole = "0", frac = ""] = s.split(".")
-  const twoDigitFrac = (frac + "00").slice(0, 2)
-  const minor = BigInt(`${whole}${twoDigitFrac}`)
-  return negative ? -minor : minor
 }
 
 /** Given a parsed CSV, mapping, and target currency, produce mapped rows + errors. */

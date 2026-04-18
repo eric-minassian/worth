@@ -148,6 +148,34 @@ export const TransactionDeleteCommand = defineCommand(
   Schema.Void,
 )
 
+export const TransactionDeleteManyCommand = defineCommand(
+  "transaction.deleteMany",
+  Schema.Struct({ ids: Schema.Array(TransactionId) }),
+  Schema.Struct({ deleted: Schema.Number }),
+)
+
+export const TransactionListDuplicatesCommand = defineCommand(
+  "transaction.listDuplicates",
+  Schema.Struct({
+    accountId: Schema.UndefinedOr(AccountId),
+    windowDays: Schema.UndefinedOr(Schema.Number),
+  }),
+  Schema.Array(
+    Schema.Struct({
+      accountId: AccountId,
+      postedAt: Schema.Number,
+      amount: Money,
+      members: Schema.Array(Transaction),
+    }),
+  ),
+)
+
+export const TransactionDismissDuplicateGroupCommand = defineCommand(
+  "transaction.dismissDuplicateGroup",
+  Schema.Struct({ memberIds: Schema.Array(TransactionId) }),
+  Schema.Void,
+)
+
 // -- Import commands --------------------------------------------------------
 
 const ColumnRole = Schema.Literals(["date", "payee", "amount", "memo", "skip"])
@@ -178,6 +206,67 @@ export const ImportCommitCommand = defineCommand(
     errors: Schema.Array(
       Schema.Struct({ rowIndex: Schema.Number, message: Schema.String }),
     ),
+  }),
+)
+
+// OFX/QFX import — typed, institution-provided format. No column mapping
+// needed; FITID provides stable dedup across re-imports.
+
+const OfxSampleRow = Schema.Struct({
+  postedAt: Schema.Number,
+  // Minor units are BigInt in domain code; serialized as decimal string for wire.
+  amountMinor: Schema.String,
+  payee: Schema.String,
+  memo: Schema.NullOr(Schema.String),
+})
+
+const OfxStatementPreview = Schema.Struct({
+  externalKey: Schema.String,
+  institutionId: Schema.NullOr(Schema.String),
+  accountIdHint: Schema.String,
+  accountType: Schema.NullOr(Schema.String),
+  currency: Schema.NullOr(Schema.String),
+  transactionCount: Schema.Number,
+  earliest: Schema.NullOr(Schema.Number),
+  latest: Schema.NullOr(Schema.Number),
+  matchedAccountId: Schema.NullOr(AccountId),
+  sample: Schema.Array(OfxSampleRow),
+})
+
+export const ImportOfxPreviewCommand = defineCommand(
+  "transaction.import.ofxPreview",
+  Schema.Struct({ text: Schema.String }),
+  Schema.Struct({
+    statements: Schema.Array(OfxStatementPreview),
+    investmentStatementCount: Schema.Number,
+    warnings: Schema.Array(Schema.String),
+  }),
+)
+
+export const ImportOfxCommitCommand = defineCommand(
+  "transaction.import.ofxCommit",
+  Schema.Struct({
+    text: Schema.String,
+    assignments: Schema.Array(
+      Schema.Struct({
+        externalKey: Schema.String,
+        accountId: AccountId,
+        linkAccount: Schema.Boolean,
+      }),
+    ),
+  }),
+  Schema.Struct({
+    perStatement: Schema.Array(
+      Schema.Struct({
+        externalKey: Schema.String,
+        accountId: AccountId,
+        total: Schema.Number,
+        imported: Schema.Number,
+        duplicates: Schema.Number,
+      }),
+    ),
+    investmentStatementCount: Schema.Number,
+    warnings: Schema.Array(Schema.String),
   }),
 )
 
@@ -418,8 +507,13 @@ export const Commands = {
   "transaction.categorize": TransactionCategorizeCommand,
   "transaction.edit": TransactionEditCommand,
   "transaction.delete": TransactionDeleteCommand,
+  "transaction.deleteMany": TransactionDeleteManyCommand,
+  "transaction.listDuplicates": TransactionListDuplicatesCommand,
+  "transaction.dismissDuplicateGroup": TransactionDismissDuplicateGroupCommand,
   "transaction.import.preview": ImportPreviewCommand,
   "transaction.import.commit": ImportCommitCommand,
+  "transaction.import.ofxPreview": ImportOfxPreviewCommand,
+  "transaction.import.ofxCommit": ImportOfxCommitCommand,
   "system.stats": SystemStatsCommand,
   "system.export": SystemExportCommand,
   "system.import": SystemImportCommand,

@@ -3,6 +3,7 @@ import { Layout } from "./Layout"
 import { Dashboard } from "./pages/Dashboard"
 import { AccountsPage } from "./pages/AccountsPage"
 import { TransactionsPage } from "./pages/TransactionsPage"
+import { DuplicatesPage } from "./pages/DuplicatesPage"
 import { CategoriesPage } from "./pages/CategoriesPage"
 import { SettingsPage } from "./pages/SettingsPage"
 
@@ -32,6 +33,12 @@ const transactionsRoute = createRoute({
   component: TransactionsPage,
 })
 
+const duplicatesRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/duplicates",
+  component: DuplicatesPage,
+})
+
 const categoriesRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "/categories",
@@ -48,6 +55,7 @@ const routeTree = rootRoute.addChildren([
   indexRoute,
   accountsRoute,
   transactionsRoute,
+  duplicatesRoute,
   categoriesRoute,
   settingsRoute,
 ])

@@ -19,6 +19,7 @@
     "@worth/core": "workspace:*",
     "@worth/db": "workspace:*",
     "@worth/domain": "workspace:*",
+    "@worth/importers": "workspace:*",
     "@worth/ipc": "workspace:*",
     "@worth/sync": "workspace:*",
     "@worth/ui": "workspace:*",

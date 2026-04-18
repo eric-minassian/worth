@@ -1,4 +1,4 @@
-import { and, asc, desc, eq, like, or } from "drizzle-orm"
+import { and, asc, desc, eq, like, or, sql } from "drizzle-orm"
 import { Context, Effect, Layer } from "effect"
 import { Db, schema } from "@worth/db"
 import {
@@ -42,6 +42,30 @@ export interface ListTransactionsQuery {
   readonly order?: "posted-asc" | "posted-desc" | undefined
 }
 
+/**
+ * A set of transactions that share the same (account, posted-day, amount,
+ * currency) fingerprint. Size >= 2 by construction. Members are ordered by
+ * `createdAt` ascending — the earliest is typically the original, and the
+ * UI may default to keeping it.
+ */
+export interface DuplicateGroup {
+  readonly accountId: AccountId
+  readonly postedAt: number
+  readonly amount: Money
+  readonly members: readonly Transaction[]
+}
+
+export interface ListDuplicateGroupsQuery {
+  readonly accountId?: AccountId | undefined
+  /**
+   * ±N days around `postedAt` that still counts as the same cluster. `0`
+   * reproduces exact-match behavior. Clusters form transitively: rows at
+   * days 0, 3, 6 with `windowDays: 3` collapse into one group because the
+   * consecutive gaps never exceed the window.
+   */
+  readonly windowDays?: number | undefined
+}
+
 export class TransactionService extends Context.Service<
   TransactionService,
   {
@@ -50,6 +74,15 @@ export class TransactionService extends Context.Service<
     readonly categorize: (input: CategorizeInput) => Effect.Effect<void, NotFound>
     readonly edit: (input: EditTransactionInput) => Effect.Effect<void, NotFound>
     readonly delete: (id: TransactionId) => Effect.Effect<void, NotFound>
+    readonly deleteMany: (
+      ids: readonly TransactionId[],
+    ) => Effect.Effect<{ readonly deleted: number }, NotFound>
+    readonly listDuplicateGroups: (
+      query: ListDuplicateGroupsQuery,
+    ) => Effect.Effect<readonly DuplicateGroup[]>
+    readonly dismissDuplicateGroup: (
+      memberIds: readonly TransactionId[],
+    ) => Effect.Effect<void>
   }
 >()("@worth/core/TransactionService") {}
 
@@ -172,6 +205,162 @@ export const TransactionServiceLive = Layer.effect(TransactionService)(
         yield* log.append({ _tag: "TransactionDeleted", id, at: Date.now() })
       })
 
-    return { create, list, categorize, edit, delete: remove }
+    const removeMany = (
+      ids: readonly TransactionId[],
+    ): Effect.Effect<{ deleted: number }, NotFound> =>
+      Effect.gen(function* () {
+        if (ids.length === 0) return { deleted: 0 }
+        // Deduplicate the request so a caller passing the same id twice doesn't
+        // produce two events; then fail fast on anything not in the projection.
+        const unique = Array.from(new Set(ids))
+        for (const id of unique) {
+          if (!exists(id)) return yield* Effect.fail(new NotFound({ entity: "Transaction", id }))
+        }
+        const at = Date.now()
+        yield* log.appendAll(
+          unique.map((id) => ({ _tag: "TransactionDeleted" as const, id, at })),
+        )
+        return { deleted: unique.length }
+      })
+
+    const MS_PER_DAY = 86_400_000
+
+    const emitCluster = (out: DuplicateGroup[], rows: readonly Transaction[]): void => {
+      const first = rows[0]
+      if (!first) return
+      // Sort members by createdAt so the UI's "oldest is default keeper"
+      // heuristic produces a sensible pick even after fuzzy grouping.
+      const sorted = [...rows].sort((a, b) => a.createdAt - b.createdAt)
+      out.push({
+        accountId: first.accountId,
+        postedAt: first.postedAt,
+        amount: first.amount,
+        members: sorted,
+      })
+    }
+
+    const listDuplicateGroups = (
+      query: ListDuplicateGroupsQuery,
+    ): Effect.Effect<readonly DuplicateGroup[]> =>
+      Effect.sync(() => {
+        const t = schema.transactions
+        const windowDays = Math.max(0, query.windowDays ?? 0)
+
+        // Pull candidate rows once. A row is only a duplicate candidate if
+        // another row in the same account shares its currency and amount —
+        // prefilter those keys in SQL so we don't stream the full ledger.
+        const candidateKeysBase = db.drizzle
+          .select({
+            accountId: t.accountId,
+            amountMinor: t.amountMinor,
+            currency: t.currency,
+          })
+          .from(t)
+        const candidateKeysFiltered =
+          query.accountId !== undefined
+            ? candidateKeysBase.where(eq(t.accountId, query.accountId))
+            : candidateKeysBase
+        const candidateKeys = candidateKeysFiltered
+          .groupBy(t.accountId, t.amountMinor, t.currency)
+          .having(sql`count(*) > 1`)
+          .all()
+
+        if (candidateKeys.length === 0) return []
+
+        // Fetch every row matching any candidate key, in one pass. Narrower
+        // than a full-table scan when the ledger is large.
+        const rowsByBucket = new Map<string, Transaction[]>()
+        for (const k of candidateKeys) {
+          const rows = db.drizzle
+            .select()
+            .from(t)
+            .where(
+              and(
+                eq(t.accountId, k.accountId),
+                eq(t.amountMinor, k.amountMinor),
+                eq(t.currency, k.currency),
+              ),
+            )
+            .orderBy(asc(t.postedAt), asc(t.createdAt))
+            .all()
+            .map(rowToTransaction)
+          rowsByBucket.set(
+            `${k.accountId}|${k.amountMinor}|${k.currency}`,
+            rows,
+          )
+        }
+
+        // Cluster by sliding window over posted_at per bucket. `windowDays: 0`
+        // requires exact match (gap === 0); otherwise consecutive rows within
+        // the window transitively join.
+        const windowMs = windowDays * MS_PER_DAY
+        const clusters: DuplicateGroup[] = []
+        for (const rows of rowsByBucket.values()) {
+          let current: Transaction[] = []
+          for (const row of rows) {
+            const prev = current[current.length - 1]
+            if (!prev) {
+              current.push(row)
+              continue
+            }
+            const gap = row.postedAt - prev.postedAt
+            const sameCluster = windowDays === 0 ? gap === 0 : gap <= windowMs
+            if (sameCluster) {
+              current.push(row)
+            } else {
+              if (current.length > 1) emitCluster(clusters, current)
+              current = [row]
+            }
+          }
+          if (current.length > 1) emitCluster(clusters, current)
+        }
+
+        if (clusters.length === 0) return []
+
+        // Filter out groups the user has previously dismissed. Key comparison
+        // uses canonical-sorted ids so membership changes invalidate dismissal.
+        const dismissedKeys = new Set(
+          db.drizzle
+            .select({ key: schema.duplicateDismissals.memberKey })
+            .from(schema.duplicateDismissals)
+            .all()
+            .map((r) => r.key),
+        )
+        const visible = clusters.filter((g) => {
+          const key = [...g.members].map((m) => m.id).sort().join(",")
+          return !dismissedKeys.has(key)
+        })
+
+        // Stable, user-friendly order: newest cluster first, by latest member.
+        visible.sort((a, b) => {
+          const latestA = a.members.reduce((m, x) => Math.max(m, x.postedAt), 0)
+          const latestB = b.members.reduce((m, x) => Math.max(m, x.postedAt), 0)
+          return latestB - latestA
+        })
+        return visible
+      })
+
+    const dismissDuplicateGroup = (
+      memberIds: readonly TransactionId[],
+    ): Effect.Effect<void> =>
+      Effect.gen(function* () {
+        if (memberIds.length < 2) return
+        yield* log.append({
+          _tag: "DuplicateGroupDismissed",
+          memberIds,
+          at: Date.now(),
+        })
+      })
+
+    return {
+      create,
+      list,
+      categorize,
+      edit,
+      delete: remove,
+      deleteMany: removeMany,
+      listDuplicateGroups,
+      dismissDuplicateGroup,
+    }
   }),
 )

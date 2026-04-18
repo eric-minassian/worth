@@ -1,6 +1,7 @@
 import { Link, useRouter, useRouterState } from "@tanstack/react-router"
 import {
   ArrowLeftRight,
+  Copy,
   LayoutDashboard,
   Settings,
   Tag,
@@ -55,7 +56,13 @@ interface LayoutProps {
   readonly children: ReactNode
 }
 
-type NavPath = "/" | "/accounts" | "/transactions" | "/categories" | "/settings"
+type NavPath =
+  | "/"
+  | "/accounts"
+  | "/transactions"
+  | "/duplicates"
+  | "/categories"
+  | "/settings"
 
 interface NavItem {
   readonly to: NavPath
@@ -69,6 +76,7 @@ const navItems: readonly NavItem[] = [
   { to: "/accounts", label: "Accounts", Icon: Wallet, shortcut: "2" },
   { to: "/transactions", label: "Transactions", Icon: ArrowLeftRight, shortcut: "3" },
   { to: "/categories", label: "Categories", Icon: Tag, shortcut: "4" },
+  { to: "/duplicates", label: "Duplicates", Icon: Copy, shortcut: "5" },
 ]
 
 const settingsItem: NavItem = {
@@ -81,6 +89,7 @@ const ROUTE_TITLES: Record<NavPath, string> = {
   "/": "Dashboard",
   "/accounts": "Accounts",
   "/transactions": "Transactions",
+  "/duplicates": "Duplicates",
   "/categories": "Categories",
   "/settings": "Settings",
 }

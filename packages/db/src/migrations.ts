@@ -63,6 +63,35 @@ export const MIGRATIONS: readonly Migration[] = [
         WHERE import_hash IS NOT NULL;
     `,
   },
+  {
+    id: "0002_account_external_keys",
+    sql: `
+      CREATE TABLE account_external_keys (
+        external_key TEXT PRIMARY KEY,
+        account_id   TEXT NOT NULL REFERENCES accounts(id),
+        linked_at    INTEGER NOT NULL
+      );
+      CREATE INDEX account_external_keys_account_idx
+        ON account_external_keys (account_id);
+    `,
+  },
+  {
+    id: "0003_duplicate_dismissals",
+    sql: `
+      CREATE TABLE duplicate_dismissals (
+        member_key   TEXT PRIMARY KEY,
+        member_ids   TEXT NOT NULL,
+        dismissed_at INTEGER NOT NULL
+      );
+    `,
+  },
+  {
+    id: "0004_transactions_fingerprint_idx",
+    sql: `
+      CREATE INDEX transactions_fingerprint_idx
+        ON transactions (account_id, posted_at, amount_minor, currency);
+    `,
+  },
 ]
 
 /**

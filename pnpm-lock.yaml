@@ -53,6 +53,9 @@ importers:
       '@worth/domain':
         specifier: workspace:*
         version: link:../../packages/domain
+      '@worth/importers':
+        specifier: workspace:*
+        version: link:../../packages/importers
       '@worth/ipc':
         specifier: workspace:*
         version: link:../../packages/ipc

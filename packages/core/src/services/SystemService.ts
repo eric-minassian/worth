@@ -86,6 +86,7 @@ export const SystemServiceLive = Layer.effect(SystemService)(
         db.drizzle.transaction((tx) => {
           tx.delete(schema.transactions).run()
           tx.delete(schema.categories).run()
+          tx.delete(schema.accountExternalKeys).run()
           tx.delete(schema.accounts).run()
           const rows = tx
             .select()

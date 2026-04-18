@@ -73,17 +73,46 @@ export const TransactionDeleted = Schema.TaggedStruct("TransactionDeleted", {
 })
 export type TransactionDeleted = Schema.Schema.Type<typeof TransactionDeleted>
 
+/**
+ * Records that a Worth account is the canonical destination for transactions
+ * imported from a given external source key (e.g. `"ofx:026009593:1234567890"`).
+ * Lets repeat OFX/QFX imports auto-route to the right account.
+ */
+export const AccountExternalKeyLinked = Schema.TaggedStruct("AccountExternalKeyLinked", {
+  id: AccountId,
+  externalKey: Schema.String,
+  at: Schema.Number,
+})
+export type AccountExternalKeyLinked = Schema.Schema.Type<typeof AccountExternalKeyLinked>
+
+/**
+ * The user looked at a duplicate cluster and confirmed the transactions are
+ * NOT duplicates of each other. `memberIds` is the canonical-sorted list of
+ * transaction ids that formed the cluster at dismissal time. When any of
+ * those ids leave the projection (e.g. later deleted) or a new id joins the
+ * cluster via fuzzy matching, the dismissal no longer applies and the cluster
+ * resurfaces — better than pretending the prior judgment extends to the new
+ * composition.
+ */
+export const DuplicateGroupDismissed = Schema.TaggedStruct("DuplicateGroupDismissed", {
+  memberIds: Schema.Array(TransactionId),
+  at: Schema.Number,
+})
+export type DuplicateGroupDismissed = Schema.Schema.Type<typeof DuplicateGroupDismissed>
+
 // -- Event union ------------------------------------------------------------
 
 export const DomainEvent = Schema.Union([
   AccountCreated,
   AccountRenamed,
   AccountArchived,
+  AccountExternalKeyLinked,
   CategoryCreated,
   TransactionImported,
   TransactionCategorized,
   TransactionEdited,
   TransactionDeleted,
+  DuplicateGroupDismissed,
 ])
 export type DomainEvent = Schema.Schema.Type<typeof DomainEvent>
 export type DomainEventTag = DomainEvent["_tag"]

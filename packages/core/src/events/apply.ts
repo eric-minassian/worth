@@ -1,7 +1,15 @@
-import { and, eq, isNotNull } from "drizzle-orm"
+import { and, asc, eq, isNotNull } from "drizzle-orm"
 import type { DrizzleClient } from "@worth/db"
 import { schema } from "@worth/db"
-import type { DomainEvent } from "@worth/domain"
+import type {
+  DomainEvent,
+  InstrumentId,
+  InvestmentAccountId,
+  InvestmentBuyRecorded,
+  InvestmentDividendRecorded,
+  InvestmentSellRecorded,
+  InvestmentSplitRecorded,
+} from "@worth/domain"
 import { hasContentFingerprint } from "./fingerprint"
 
 /**
@@ -155,5 +163,357 @@ export const applyEvent = (db: DrizzleClient, event: DomainEvent): void => {
         .run()
       return
     }
+
+    case "InstrumentCreated":
+      db.insert(schema.instruments)
+        .values({
+          id: event.id,
+          symbol: event.symbol,
+          name: event.name,
+          kind: event.kind,
+          currency: event.currency,
+          createdAt: event.at,
+        })
+        .onConflictDoNothing()
+        .run()
+      return
+
+    case "InvestmentAccountCreated":
+      db.insert(schema.investmentAccounts)
+        .values({
+          id: event.id,
+          name: event.name,
+          institution: event.institution,
+          currency: event.currency,
+          createdAt: event.at,
+          archivedAt: null,
+        })
+        .onConflictDoNothing()
+        .run()
+      return
+
+    case "InvestmentAccountRenamed":
+      db.update(schema.investmentAccounts)
+        .set({ name: event.name })
+        .where(eq(schema.investmentAccounts.id, event.id))
+        .run()
+      return
+
+    case "InvestmentAccountArchived":
+      db.update(schema.investmentAccounts)
+        .set({ archivedAt: event.at })
+        .where(eq(schema.investmentAccounts.id, event.id))
+        .run()
+      return
+
+    case "InvestmentAccountExternalKeyLinked":
+      db.insert(schema.investmentAccountExternalKeys)
+        .values({
+          externalKey: event.externalKey,
+          accountId: event.id,
+          linkedAt: event.at,
+        })
+        .onConflictDoNothing()
+        .run()
+      return
+
+    case "InvestmentBuyRecorded":
+      applyBuy(db, event)
+      return
+
+    case "InvestmentSellRecorded":
+      applySell(db, event)
+      return
+
+    case "InvestmentDividendRecorded":
+      applyDividend(db, event)
+      return
+
+    case "InvestmentSplitRecorded":
+      applySplit(db, event)
+      return
+
+    case "InvestmentCashFlowRecorded":
+      db.insert(schema.investmentTransactions)
+        .values({
+          id: event.id,
+          accountId: event.accountId,
+          instrumentId: null,
+          kind: event.kind,
+          postedAt: event.postedAt,
+          quantity: null,
+          pricePerShareMinor: null,
+          feesMinor: null,
+          amountMinor: Number(event.amount.minor),
+          memo: event.memo,
+          splitNumerator: null,
+          splitDenominator: null,
+          currency: event.amount.currency,
+          createdAt: event.at,
+        })
+        .onConflictDoNothing()
+        .run()
+      return
+
+    case "PriceQuoteRecorded": {
+      const priceMinor = Number(event.price.minor)
+      db.insert(schema.priceQuotes)
+        .values({
+          instrumentId: event.instrumentId,
+          asOf: event.asOf,
+          priceMinor,
+          currency: event.price.currency,
+          recordedAt: event.at,
+        })
+        .onConflictDoUpdate({
+          target: [schema.priceQuotes.instrumentId, schema.priceQuotes.asOf],
+          set: {
+            priceMinor,
+            currency: event.price.currency,
+            recordedAt: event.at,
+          },
+        })
+        .run()
+      return
+    }
   }
+}
+
+// -- Investment helpers -----------------------------------------------------
+
+const applyBuy = (db: DrizzleClient, event: InvestmentBuyRecorded): void => {
+  const quantity = Number(event.quantity)
+  const totalMinor = Number(event.total.minor)
+  const lotBasis = totalMinor < 0 ? -totalMinor : totalMinor
+
+  db.insert(schema.investmentTransactions)
+    .values({
+      id: event.id,
+      accountId: event.accountId,
+      instrumentId: event.instrumentId,
+      kind: "buy",
+      postedAt: event.postedAt,
+      quantity,
+      pricePerShareMinor: Number(event.pricePerShare.minor),
+      feesMinor: Number(event.fees.minor),
+      amountMinor: totalMinor,
+      splitNumerator: null,
+      splitDenominator: null,
+      currency: event.total.currency,
+      createdAt: event.at,
+    })
+    .onConflictDoNothing()
+    .run()
+
+  // Cost basis for the new lot = absolute cash out = quantity*price + fees.
+  // Using the event's |total| keeps apply pure: we trust what the event
+  // carried rather than recomputing (and diverging on rounding).
+  db.insert(schema.lots)
+    .values({
+      id: event.id,
+      accountId: event.accountId,
+      instrumentId: event.instrumentId,
+      openedAt: event.postedAt,
+      originalQuantity: quantity,
+      remainingQuantity: quantity,
+      originalCostBasisMinor: lotBasis,
+      remainingCostBasisMinor: lotBasis,
+      currency: event.total.currency,
+    })
+    .onConflictDoNothing()
+    .run()
+
+  bumpHolding(db, event.accountId, event.instrumentId, quantity, lotBasis, event.total.currency)
+}
+
+const applySell = (db: DrizzleClient, event: InvestmentSellRecorded): void => {
+  const sellQty = Number(event.quantity)
+  db.insert(schema.investmentTransactions)
+    .values({
+      id: event.id,
+      accountId: event.accountId,
+      instrumentId: event.instrumentId,
+      kind: "sell",
+      postedAt: event.postedAt,
+      quantity: sellQty,
+      pricePerShareMinor: Number(event.pricePerShare.minor),
+      feesMinor: Number(event.fees.minor),
+      amountMinor: Number(event.total.minor),
+      splitNumerator: null,
+      splitDenominator: null,
+      currency: event.total.currency,
+      createdAt: event.at,
+    })
+    .onConflictDoNothing()
+    .run()
+
+  if (sellQty <= 0) return
+
+  // FIFO: consume from oldest lots first. Ordering by (opened_at, id) keeps
+  // the reduction deterministic even when multiple buys share a timestamp.
+  let toConsume = sellQty
+  let basisConsumed = 0
+  const openLots = db
+    .select()
+    .from(schema.lots)
+    .where(
+      and(
+        eq(schema.lots.accountId, event.accountId),
+        eq(schema.lots.instrumentId, event.instrumentId),
+      ),
+    )
+    .orderBy(asc(schema.lots.openedAt), asc(schema.lots.id))
+    .all()
+  for (const lot of openLots) {
+    if (toConsume === 0) break
+    if (lot.remainingQuantity <= 0) continue
+    const take = lot.remainingQuantity < toConsume ? lot.remainingQuantity : toConsume
+    const takeBasis =
+      take === lot.remainingQuantity
+        ? lot.remainingCostBasisMinor
+        : Math.trunc((lot.remainingCostBasisMinor * take) / lot.remainingQuantity)
+    db.update(schema.lots)
+      .set({
+        remainingQuantity: lot.remainingQuantity - take,
+        remainingCostBasisMinor: lot.remainingCostBasisMinor - takeBasis,
+      })
+      .where(eq(schema.lots.id, lot.id))
+      .run()
+    toConsume -= take
+    basisConsumed += takeBasis
+  }
+
+  // Holding reduces by the quantity actually consumed (ignoring any shortfall
+  // — a sell beyond available lots is a no-op on the excess, same shape as
+  // the banking TransactionImported dedup path).
+  const consumedQty = sellQty - toConsume
+  if (consumedQty > 0) {
+    bumpHolding(
+      db,
+      event.accountId,
+      event.instrumentId,
+      -consumedQty,
+      -basisConsumed,
+      event.total.currency,
+    )
+  }
+}
+
+const applyDividend = (db: DrizzleClient, event: InvestmentDividendRecorded): void => {
+  db.insert(schema.investmentTransactions)
+    .values({
+      id: event.id,
+      accountId: event.accountId,
+      instrumentId: event.instrumentId,
+      kind: "dividend",
+      postedAt: event.postedAt,
+      quantity: null,
+      pricePerShareMinor: null,
+      feesMinor: null,
+      amountMinor: Number(event.amount.minor),
+      splitNumerator: null,
+      splitDenominator: null,
+      currency: event.amount.currency,
+      createdAt: event.at,
+    })
+    .onConflictDoNothing()
+    .run()
+}
+
+const applySplit = (db: DrizzleClient, event: InvestmentSplitRecorded): void => {
+  if (event.denominator <= 0 || event.numerator <= 0) return
+
+  // Splits are instrument-wide, not per-account — we don't project them into
+  // investment_transactions (which is per-account). UI surfaces splits via
+  // the event log directly when a split history is wanted.
+  const num = event.numerator
+  const den = event.denominator
+
+  const lots = db
+    .select()
+    .from(schema.lots)
+    .where(eq(schema.lots.instrumentId, event.instrumentId))
+    .all()
+  for (const lot of lots) {
+    db.update(schema.lots)
+      .set({
+        originalQuantity: Math.trunc((lot.originalQuantity * num) / den),
+        remainingQuantity: Math.trunc((lot.remainingQuantity * num) / den),
+      })
+      .where(eq(schema.lots.id, lot.id))
+      .run()
+  }
+
+  const rows = db
+    .select()
+    .from(schema.holdings)
+    .where(eq(schema.holdings.instrumentId, event.instrumentId))
+    .all()
+  for (const h of rows) {
+    db.update(schema.holdings)
+      .set({ quantity: Math.trunc((h.quantity * num) / den) })
+      .where(
+        and(
+          eq(schema.holdings.accountId, h.accountId),
+          eq(schema.holdings.instrumentId, h.instrumentId),
+        ),
+      )
+      .run()
+  }
+}
+
+const bumpHolding = (
+  db: DrizzleClient,
+  accountId: InvestmentAccountId,
+  instrumentId: InstrumentId,
+  deltaQty: number,
+  deltaBasis: number,
+  currency: string,
+): void => {
+  const existing = db
+    .select()
+    .from(schema.holdings)
+    .where(
+      and(
+        eq(schema.holdings.accountId, accountId),
+        eq(schema.holdings.instrumentId, instrumentId),
+      ),
+    )
+    .get()
+  if (existing === undefined) {
+    db.insert(schema.holdings)
+      .values({
+        accountId,
+        instrumentId,
+        quantity: deltaQty,
+        costBasisMinor: deltaBasis,
+        currency,
+      })
+      .run()
+    return
+  }
+  const nextQty = existing.quantity + deltaQty
+  const nextBasis = existing.costBasisMinor + deltaBasis
+  if (nextQty === 0) {
+    // Zeroed-out position: drop the row so UI "current holdings" stays clean.
+    // The underlying lots row stays in place for cost-basis history.
+    db.delete(schema.holdings)
+      .where(
+        and(
+          eq(schema.holdings.accountId, accountId),
+          eq(schema.holdings.instrumentId, instrumentId),
+        ),
+      )
+      .run()
+    return
+  }
+  db.update(schema.holdings)
+    .set({ quantity: nextQty, costBasisMinor: nextBasis })
+    .where(
+      and(
+        eq(schema.holdings.accountId, accountId),
+        eq(schema.holdings.instrumentId, instrumentId),
+      ),
+    )
+    .run()
 }

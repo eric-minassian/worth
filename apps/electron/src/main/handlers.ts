@@ -5,6 +5,9 @@ import {
   AccountService,
   CategoryService,
   ImportService,
+  InstrumentService,
+  InvestmentAccountService,
+  InvestmentTransactionService,
   SystemService,
   TransactionService,
 } from "@worth/core"
@@ -24,6 +27,9 @@ export type CommandHandler<K extends CommandKind> = (
   | AccountService
   | CategoryService
   | ImportService
+  | InstrumentService
+  | InvestmentAccountService
+  | InvestmentTransactionService
   | SystemService
   | TransactionService
   | Updater
@@ -160,6 +166,138 @@ export const handlers: Handlers = {
     Effect.gen(function* () {
       const svc = yield* ImportService
       return yield* svc.ofxCommit(input)
+    }),
+
+  "transaction.import.fidelityPreview": (input) =>
+    Effect.gen(function* () {
+      const svc = yield* ImportService
+      return yield* svc.fidelityPreview(input)
+    }),
+
+  "transaction.import.fidelityCommit": (input) =>
+    Effect.gen(function* () {
+      const svc = yield* ImportService
+      return yield* svc.fidelityCommit(input)
+    }),
+
+  "instrument.create": (input) =>
+    Effect.gen(function* () {
+      const svc = yield* InstrumentService
+      return yield* svc.create(input)
+    }),
+
+  "instrument.list": () =>
+    Effect.gen(function* () {
+      const svc = yield* InstrumentService
+      return yield* svc.list
+    }),
+
+  "instrument.get": (input) =>
+    Effect.gen(function* () {
+      const svc = yield* InstrumentService
+      return yield* svc.get(input.id)
+    }),
+
+  "instrument.findBySymbol": (input) =>
+    Effect.gen(function* () {
+      const svc = yield* InstrumentService
+      return yield* svc.findBySymbol(input.symbol)
+    }),
+
+  "instrument.recordPrice": (input) =>
+    Effect.gen(function* () {
+      const svc = yield* InstrumentService
+      yield* svc.recordPrice(input)
+    }),
+
+  "instrument.latestPrice": (input) =>
+    Effect.gen(function* () {
+      const svc = yield* InstrumentService
+      return yield* svc.latestPrice(input.instrumentId)
+    }),
+
+  "instrument.listPrices": (input) =>
+    Effect.gen(function* () {
+      const svc = yield* InstrumentService
+      return yield* svc.listPrices(input)
+    }),
+
+  "investmentAccount.create": (input) =>
+    Effect.gen(function* () {
+      const svc = yield* InvestmentAccountService
+      return yield* svc.create(input)
+    }),
+
+  "investmentAccount.list": () =>
+    Effect.gen(function* () {
+      const svc = yield* InvestmentAccountService
+      return yield* svc.list
+    }),
+
+  "investmentAccount.get": (input) =>
+    Effect.gen(function* () {
+      const svc = yield* InvestmentAccountService
+      return yield* svc.get(input.id)
+    }),
+
+  "investmentAccount.rename": (input) =>
+    Effect.gen(function* () {
+      const svc = yield* InvestmentAccountService
+      yield* svc.rename(input)
+    }),
+
+  "investmentAccount.archive": (input) =>
+    Effect.gen(function* () {
+      const svc = yield* InvestmentAccountService
+      yield* svc.archive(input.id)
+    }),
+
+  "investmentAccount.listHoldings": (input) =>
+    Effect.gen(function* () {
+      const svc = yield* InvestmentAccountService
+      return yield* svc.listHoldings(input.accountId)
+    }),
+
+  "investmentAccount.listCashBalances": (input) =>
+    Effect.gen(function* () {
+      const svc = yield* InvestmentAccountService
+      return yield* svc.listCashBalances(input.accountId)
+    }),
+
+  "investment.buy": (input) =>
+    Effect.gen(function* () {
+      const svc = yield* InvestmentTransactionService
+      return yield* svc.buy(input)
+    }),
+
+  "investment.sell": (input) =>
+    Effect.gen(function* () {
+      const svc = yield* InvestmentTransactionService
+      return yield* svc.sell(input)
+    }),
+
+  "investment.dividend": (input) =>
+    Effect.gen(function* () {
+      const svc = yield* InvestmentTransactionService
+      return yield* svc.dividend(input)
+    }),
+
+  "investment.split": (input) =>
+    Effect.gen(function* () {
+      const svc = yield* InvestmentTransactionService
+      yield* svc.split(input)
+    }),
+
+  "investment.recordCashFlow": (input) =>
+    Effect.gen(function* () {
+      const svc = yield* InvestmentTransactionService
+      return yield* svc.recordCashFlow(input)
+    }),
+
+  "investment.list": (input) =>
+    Effect.gen(function* () {
+      const svc = yield* InvestmentTransactionService
+      return yield* svc.list(input)
     }),
 
   "system.stats": () =>

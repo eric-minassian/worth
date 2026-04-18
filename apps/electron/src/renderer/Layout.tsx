@@ -3,6 +3,7 @@ import {
   ArrowLeftRight,
   Copy,
   LayoutDashboard,
+  PieChart,
   Settings,
   Tag,
   Wallet,
@@ -62,6 +63,7 @@ type NavPath =
   | "/transactions"
   | "/duplicates"
   | "/categories"
+  | "/investments"
   | "/settings"
 
 interface NavItem {
@@ -75,8 +77,9 @@ const navItems: readonly NavItem[] = [
   { to: "/", label: "Dashboard", Icon: LayoutDashboard, shortcut: "1" },
   { to: "/accounts", label: "Accounts", Icon: Wallet, shortcut: "2" },
   { to: "/transactions", label: "Transactions", Icon: ArrowLeftRight, shortcut: "3" },
-  { to: "/categories", label: "Categories", Icon: Tag, shortcut: "4" },
-  { to: "/duplicates", label: "Duplicates", Icon: Copy, shortcut: "5" },
+  { to: "/investments", label: "Investments", Icon: PieChart, shortcut: "4" },
+  { to: "/categories", label: "Categories", Icon: Tag, shortcut: "5" },
+  { to: "/duplicates", label: "Duplicates", Icon: Copy, shortcut: "6" },
 ]
 
 const settingsItem: NavItem = {
@@ -91,6 +94,7 @@ const ROUTE_TITLES: Record<NavPath, string> = {
   "/transactions": "Transactions",
   "/duplicates": "Duplicates",
   "/categories": "Categories",
+  "/investments": "Investments",
   "/settings": "Settings",
 }
 

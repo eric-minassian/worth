@@ -5,6 +5,7 @@ import { AccountsPage } from "./pages/AccountsPage"
 import { TransactionsPage } from "./pages/TransactionsPage"
 import { DuplicatesPage } from "./pages/DuplicatesPage"
 import { CategoriesPage } from "./pages/CategoriesPage"
+import { InvestmentsPage } from "./pages/Investments"
 import { SettingsPage } from "./pages/SettingsPage"
 
 const rootRoute = createRootRoute({
@@ -45,6 +46,12 @@ const categoriesRoute = createRoute({
   component: CategoriesPage,
 })
 
+const investmentsRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/investments",
+  component: InvestmentsPage,
+})
+
 const settingsRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "/settings",
@@ -57,6 +64,7 @@ const routeTree = rootRoute.addChildren([
   transactionsRoute,
   duplicatesRoute,
   categoriesRoute,
+  investmentsRoute,
   settingsRoute,
 ])
 

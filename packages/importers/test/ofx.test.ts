@@ -1,5 +1,10 @@
 import { describe, expect, it } from "vitest"
-import { externalAccountKey, parseOfx } from "../src"
+import {
+  externalAccountKey,
+  externalInvestmentAccountKey,
+  parseOfx,
+  parseQuantity,
+} from "../src"
 
 // -- Fixtures (inline) ------------------------------------------------------
 
@@ -242,9 +247,9 @@ describe("parseOfx — investment-only file", () => {
     expect(result.statements).toHaveLength(0)
   })
 
-  it("counts the investment statement so the UI can warn", () => {
+  it("extracts the investment statement (even if empty)", () => {
     expect(result.investmentStatementCount).toBe(1)
-    expect(result.warnings.some((w) => /investment/i.test(w))).toBe(true)
+    expect(result.investmentStatements[0]?.account.brokerId).toBe("fidelity.com")
   })
 })
 
@@ -282,6 +287,308 @@ describe("parseOfx — robustness", () => {
     const txns = result.statements[0]?.transactions ?? []
     expect(txns).toHaveLength(2)
     expect(result.warnings.some((w) => /missing/i.test(w))).toBe(true)
+  })
+})
+
+// OFX 1.x brokerage statement with buy, sell, dividend, plus a SECLIST.
+const OFX1_BROKERAGE = `OFXHEADER:100
+DATA:OFXSGML
+VERSION:102
+
+<OFX>
+<INVSTMTMSGSRSV1>
+<INVSTMTTRNRS>
+<TRNUID>0
+<STATUS><CODE>0<SEVERITY>INFO</STATUS>
+<INVSTMTRS>
+<DTASOF>20240131000000
+<CURDEF>USD
+<INVACCTFROM>
+<BROKERID>fidelity.com
+<ACCTID>Z12345678
+</INVACCTFROM>
+<INVTRANLIST>
+<DTSTART>20240101000000
+<DTEND>20240131000000
+<BUYSTOCK>
+<INVBUY>
+<INVTRAN>
+<FITID>BUY-20240105-001
+<DTTRADE>20240105000000
+</INVTRAN>
+<SECID>
+<UNIQUEID>922908363
+<UNIQUEIDTYPE>CUSIP
+</SECID>
+<UNITS>10
+<UNITPRICE>200.00
+<COMMISSION>0
+<FEES>0
+<TOTAL>-2000.00
+</INVBUY>
+<BUYTYPE>BUY
+</BUYSTOCK>
+<SELLSTOCK>
+<INVSELL>
+<INVTRAN>
+<FITID>SELL-20240120-002
+<DTTRADE>20240120000000
+</INVTRAN>
+<SECID>
+<UNIQUEID>922908363
+<UNIQUEIDTYPE>CUSIP
+</SECID>
+<UNITS>4
+<UNITPRICE>250.00
+<COMMISSION>1.00
+<FEES>0
+<TOTAL>999.00
+</INVSELL>
+<SELLTYPE>SELL
+</SELLSTOCK>
+<INCOME>
+<INVTRAN>
+<FITID>DIV-20240125-003
+<DTTRADE>20240125000000
+</INVTRAN>
+<SECID>
+<UNIQUEID>922908363
+<UNIQUEIDTYPE>CUSIP
+</SECID>
+<INCOMETYPE>DIV
+<TOTAL>12.50
+</INCOME>
+</INVTRANLIST>
+</INVSTMTRS>
+</INVSTMTTRNRS>
+</INVSTMTMSGSRSV1>
+<SECLISTMSGSRSV1>
+<SECLIST>
+<STOCKINFO>
+<SECINFO>
+<SECID>
+<UNIQUEID>922908363
+<UNIQUEIDTYPE>CUSIP
+</SECID>
+<SECNAME>Vanguard Total Stock Market ETF
+<TICKER>VTI
+</SECINFO>
+</STOCKINFO>
+</SECLIST>
+</SECLISTMSGSRSV1>
+</OFX>`
+
+describe("parseOfx — brokerage statement with buy/sell/dividend", () => {
+  const result = parseOfx(OFX1_BROKERAGE)
+
+  it("extracts the security with ticker + name", () => {
+    expect(result.securities).toHaveLength(1)
+    expect(result.securities[0]).toMatchObject({
+      secId: { uniqueId: "922908363", uniqueIdType: "CUSIP" },
+      ticker: "VTI",
+      name: "Vanguard Total Stock Market ETF",
+      kind: "stock",
+    })
+  })
+
+  it("extracts the investment account", () => {
+    expect(result.investmentStatements).toHaveLength(1)
+    expect(result.investmentStatements[0]?.account).toEqual({
+      brokerId: "fidelity.com",
+      accountId: "Z12345678",
+      currency: "USD",
+    })
+  })
+
+  it("parses buy/sell/dividend transactions with correct signs and magnitudes", () => {
+    const txns = result.investmentStatements[0]?.transactions ?? []
+    expect(txns).toHaveLength(3)
+
+    const [buy, sell, div] = txns
+    expect(buy).toMatchObject({
+      kind: "buy",
+      fitid: "BUY-20240105-001",
+      units: BigInt(10 * 1e8),
+      unitPriceMinor: 20000n,
+      feesMinor: 0n,
+      totalMinor: -200000n,
+    })
+    expect(sell).toMatchObject({
+      kind: "sell",
+      fitid: "SELL-20240120-002",
+      units: BigInt(4 * 1e8),
+      unitPriceMinor: 25000n,
+      feesMinor: 100n,
+      totalMinor: 99900n,
+    })
+    expect(div).toMatchObject({
+      kind: "dividend",
+      fitid: "DIV-20240125-003",
+      totalMinor: 1250n,
+      incomeType: "DIV",
+    })
+  })
+})
+
+// Vanguard-style QFX: BUYMF with 5-decimal UNITPRICE, REINVDIV + REINVEST,
+// INVBANKTRAN (cash movement) that should be skipped with a warning.
+const VANGUARD_QFX = `OFXHEADER:100
+DATA:OFXSGML
+VERSION:102
+
+<OFX>
+<INVSTMTMSGSRSV1>
+<INVSTMTTRNRS>
+<TRNUID>0
+<INVSTMTRS>
+<DTASOF>20250101000000.000[-5:EST]
+<CURDEF>USD
+<INVACCTFROM>
+<BROKERID>vanguard.com
+<ACCTID>57096170
+</INVACCTFROM>
+<INVTRANLIST>
+<DTSTART>20240101000000.000[-5:EST]
+<DTEND>20250101000000.000[-5:EST]
+<BUYMF>
+<INVBUY>
+<INVTRAN>
+<FITID>VG-BUY-1
+<DTTRADE>20241025160000.000[-5:EST]
+<DTSETTLE>20241028160000.000[-5:EST]
+</INVTRAN>
+<SECID>
+<UNIQUEID>922908728
+<UNIQUEIDTYPE>CUSIP
+</SECID>
+<UNITS>126.277
+<UNITPRICE>138.98018
+<TOTAL>-17550.0
+</INVBUY>
+<BUYTYPE>BUY
+</BUYMF>
+<REINVDIV>
+<INVTRAN>
+<FITID>VG-REINV-1
+<DTTRADE>20241031160000.000[-5:EST]
+</INVTRAN>
+<SECID>
+<UNIQUEID>922908728
+<UNIQUEIDTYPE>CUSIP
+</SECID>
+<INCOMETYPE>DIV
+<TOTAL>-9.24
+<UNITS>0.955
+<UNITPRICE>9.68
+</REINVDIV>
+<INVBANKTRAN>
+<STMTTRN>
+<TRNTYPE>CREDIT
+<DTPOSTED>20241101000000
+<TRNAMT>500.00
+<FITID>VG-CASH-1
+<NAME>ELECTRONIC TRANSFER
+</STMTTRN>
+<SUBACCTFUND>CASH
+</INVBANKTRAN>
+</INVTRANLIST>
+</INVSTMTRS>
+</INVSTMTTRNRS>
+</INVSTMTMSGSRSV1>
+<SECLISTMSGSRSV1>
+<SECLIST>
+<MFINFO>
+<SECINFO>
+<SECID>
+<UNIQUEID>922908728
+<UNIQUEIDTYPE>CUSIP
+</SECID>
+<SECNAME>Vanguard Total Bond Market Index Admiral
+<TICKER>VBTLX
+</SECINFO>
+</MFINFO>
+</SECLIST>
+</SECLISTMSGSRSV1>
+</OFX>`
+
+describe("parseOfx — Vanguard-style QFX", () => {
+  const result = parseOfx(VANGUARD_QFX)
+
+  it("extracts a mutual fund from SECLIST (MFINFO → mutual_fund)", () => {
+    expect(result.securities).toHaveLength(1)
+    expect(result.securities[0]).toMatchObject({
+      ticker: "VBTLX",
+      kind: "mutual_fund",
+    })
+  })
+
+  it("parses a 5-decimal UNITPRICE losslessly-enough (truncated to cents)", () => {
+    const buy = result.investmentStatements[0]?.transactions.find(
+      (t) => t.fitid === "VG-BUY-1",
+    )
+    expect(buy?.kind).toBe("buy")
+    // 126.277 × 1e8 = 12_627_700_000 micro-units
+    expect(buy && "units" in buy ? buy.units : null).toBe(12_627_700_000n)
+    // 138.98018 truncated to 2 decimals = 13898 cents
+    expect(buy && "unitPriceMinor" in buy ? buy.unitPriceMinor : null).toBe(
+      13898n,
+    )
+    expect(buy && "totalMinor" in buy ? buy.totalMinor : null).toBe(-1_755_000n)
+  })
+
+  it("captures REINVDIV as a reinvest-kind transaction with positive totalMinor", () => {
+    const re = result.investmentStatements[0]?.transactions.find(
+      (t) => t.fitid === "VG-REINV-1",
+    )
+    expect(re?.kind).toBe("reinvest")
+    expect(re && "units" in re ? re.units : null).toBe(95_500_000n)
+    // Absolute value — the sign on cash-flow is recovered at commit time.
+    expect(re && "totalMinor" in re ? re.totalMinor : null).toBe(924n)
+    expect(
+      re && "incomeType" in re ? re.incomeType : null,
+    ).toBe("DIV")
+  })
+
+  it("emits INVBANKTRAN as a cash-kind transaction with preserved sign + memo", () => {
+    const txns = result.investmentStatements[0]?.transactions ?? []
+    const cash = txns.find((t) => t.fitid === "VG-CASH-1")
+    expect(cash?.kind).toBe("cash")
+    // <TRNAMT>500.00 → +50000 cents (credit).
+    expect(cash && "amountMinor" in cash ? cash.amountMinor : null).toBe(50000n)
+    expect(cash && "trnType" in cash ? cash.trnType : null).toBe("CREDIT")
+    expect(
+      cash && "memo" in cash ? cash.memo : null,
+    ).toContain("ELECTRONIC TRANSFER")
+  })
+})
+
+describe("parseQuantity", () => {
+  it("scales integers to 1e-8 micro-units", () => {
+    expect(parseQuantity("10")).toBe(BigInt(10 * 1e8))
+  })
+  it("handles up to 8 decimal places losslessly", () => {
+    expect(parseQuantity("0.12345678")).toBe(12345678n)
+  })
+  it("pads fractional zeros", () => {
+    expect(parseQuantity("1.5")).toBe(150000000n)
+  })
+  it("rejects more than 8 decimals", () => {
+    expect(parseQuantity("1.123456789")).toBeNull()
+  })
+  it("preserves sign", () => {
+    expect(parseQuantity("-3.5")).toBe(-350000000n)
+  })
+})
+
+describe("externalInvestmentAccountKey", () => {
+  it("namespaces under ofx-inv:", () => {
+    expect(
+      externalInvestmentAccountKey({
+        brokerId: "fidelity.com",
+        accountId: "Z12345678",
+        currency: "USD",
+      }),
+    ).toBe("ofx-inv:fidelity.com:Z12345678")
   })
 })
 

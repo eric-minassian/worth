@@ -92,6 +92,99 @@ export const MIGRATIONS: readonly Migration[] = [
         ON transactions (account_id, posted_at, amount_minor, currency);
     `,
   },
+  {
+    id: "0005_investments",
+    sql: `
+      CREATE TABLE instruments (
+        id         TEXT PRIMARY KEY,
+        symbol     TEXT NOT NULL,
+        name       TEXT NOT NULL,
+        kind       TEXT NOT NULL,
+        currency   TEXT NOT NULL,
+        created_at INTEGER NOT NULL
+      );
+
+      CREATE TABLE investment_accounts (
+        id          TEXT PRIMARY KEY,
+        name        TEXT NOT NULL,
+        institution TEXT,
+        currency    TEXT NOT NULL,
+        created_at  INTEGER NOT NULL,
+        archived_at INTEGER
+      );
+
+      CREATE TABLE lots (
+        id                          TEXT PRIMARY KEY,
+        account_id                  TEXT NOT NULL REFERENCES investment_accounts(id),
+        instrument_id               TEXT NOT NULL REFERENCES instruments(id),
+        opened_at                   INTEGER NOT NULL,
+        original_quantity           INTEGER NOT NULL,
+        remaining_quantity          INTEGER NOT NULL,
+        original_cost_basis_minor   INTEGER NOT NULL,
+        remaining_cost_basis_minor  INTEGER NOT NULL,
+        currency                    TEXT NOT NULL
+      );
+      CREATE INDEX lots_account_instrument_idx
+        ON lots (account_id, instrument_id);
+      CREATE INDEX lots_fifo_idx
+        ON lots (account_id, instrument_id, opened_at, id);
+
+      CREATE TABLE holdings (
+        account_id        TEXT NOT NULL REFERENCES investment_accounts(id),
+        instrument_id     TEXT NOT NULL REFERENCES instruments(id),
+        quantity          INTEGER NOT NULL,
+        cost_basis_minor  INTEGER NOT NULL,
+        currency          TEXT NOT NULL,
+        PRIMARY KEY (account_id, instrument_id)
+      );
+      CREATE INDEX holdings_account_idx ON holdings (account_id);
+
+      CREATE TABLE investment_transactions (
+        id                    TEXT PRIMARY KEY,
+        account_id            TEXT NOT NULL REFERENCES investment_accounts(id),
+        instrument_id         TEXT REFERENCES instruments(id),
+        kind                  TEXT NOT NULL,
+        posted_at             INTEGER NOT NULL,
+        quantity              INTEGER,
+        price_per_share_minor INTEGER,
+        fees_minor            INTEGER,
+        amount_minor          INTEGER NOT NULL,
+        split_numerator       INTEGER,
+        split_denominator     INTEGER,
+        currency              TEXT NOT NULL,
+        created_at            INTEGER NOT NULL
+      );
+      CREATE INDEX investment_transactions_account_posted_idx
+        ON investment_transactions (account_id, posted_at);
+
+      CREATE TABLE price_quotes (
+        instrument_id TEXT NOT NULL REFERENCES instruments(id),
+        as_of         INTEGER NOT NULL,
+        price_minor   INTEGER NOT NULL,
+        currency      TEXT NOT NULL,
+        recorded_at   INTEGER NOT NULL,
+        PRIMARY KEY (instrument_id, as_of)
+      );
+    `,
+  },
+  {
+    id: "0006_investment_account_external_keys",
+    sql: `
+      CREATE TABLE investment_account_external_keys (
+        external_key TEXT PRIMARY KEY,
+        account_id   TEXT NOT NULL REFERENCES investment_accounts(id),
+        linked_at    INTEGER NOT NULL
+      );
+      CREATE INDEX investment_account_external_keys_account_idx
+        ON investment_account_external_keys (account_id);
+    `,
+  },
+  {
+    id: "0007_investment_transactions_memo",
+    sql: `
+      ALTER TABLE investment_transactions ADD COLUMN memo TEXT;
+    `,
+  },
 ]
 
 /**

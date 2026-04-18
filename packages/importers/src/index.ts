@@ -1,4 +1,5 @@
 export * from "./csv"
+export * from "./fidelity-csv"
 export * from "./mapping"
 export * from "./hash"
 export * from "./money"

@@ -3,12 +3,24 @@ import {
   Account,
   AccountId,
   AccountType,
+  CashFlowKind,
   Category,
   CategoryId,
   CurrencyCode,
   DeviceId,
   Hlc,
+  Holding,
+  Instrument,
+  InstrumentId,
+  InstrumentKind,
+  InvestmentAccount,
+  InvestmentAccountId,
+  InvestmentCashBalance,
+  InvestmentTransaction,
+  InvestmentTransactionKind,
   Money,
+  PriceQuote,
+  Quantity,
   Transaction,
   TransactionId,
 } from "@worth/domain"
@@ -233,12 +245,102 @@ const OfxStatementPreview = Schema.Struct({
   sample: Schema.Array(OfxSampleRow),
 })
 
+const OfxInvSampleRow = Schema.Struct({
+  kind: Schema.Literals(["buy", "sell", "dividend", "reinvest", "cash"]),
+  tradeDate: Schema.Number,
+  symbol: Schema.NullOr(Schema.String),
+  securityName: Schema.String,
+  units: Schema.NullOr(Schema.String),
+  unitPriceMinor: Schema.NullOr(Schema.String),
+  totalMinor: Schema.String,
+})
+
+const OfxInvStatementPreview = Schema.Struct({
+  externalKey: Schema.String,
+  brokerId: Schema.NullOr(Schema.String),
+  accountIdHint: Schema.String,
+  currency: Schema.NullOr(Schema.String),
+  transactionCount: Schema.Number,
+  tradeCount: Schema.Number,
+  dividendCount: Schema.Number,
+  securityCount: Schema.Number,
+  earliest: Schema.NullOr(Schema.Number),
+  latest: Schema.NullOr(Schema.Number),
+  matchedInvestmentAccountId: Schema.NullOr(InvestmentAccountId),
+  sample: Schema.Array(OfxInvSampleRow),
+})
+
 export const ImportOfxPreviewCommand = defineCommand(
   "transaction.import.ofxPreview",
   Schema.Struct({ text: Schema.String }),
   Schema.Struct({
     statements: Schema.Array(OfxStatementPreview),
+    investmentStatements: Schema.Array(OfxInvStatementPreview),
     investmentStatementCount: Schema.Number,
+    warnings: Schema.Array(Schema.String),
+  }),
+)
+
+// Fidelity CSV — Accounts_History.csv style export. Shape parallels OFX
+// investment import (multi-account grouping by CSV Account Number column).
+
+const FidelityInvSampleRow = Schema.Struct({
+  kind: Schema.Literals(["buy", "sell", "dividend", "reinvest", "cash"]),
+  tradeDate: Schema.Number,
+  symbol: Schema.NullOr(Schema.String),
+  securityName: Schema.String,
+  units: Schema.NullOr(Schema.String),
+  unitPriceMinor: Schema.NullOr(Schema.String),
+  totalMinor: Schema.String,
+})
+
+const FidelityStatementPreview = Schema.Struct({
+  externalKey: Schema.String,
+  accountNumber: Schema.String,
+  accountLabel: Schema.String,
+  transactionCount: Schema.Number,
+  tradeCount: Schema.Number,
+  dividendCount: Schema.Number,
+  reinvestCount: Schema.Number,
+  securityCount: Schema.Number,
+  earliest: Schema.NullOr(Schema.Number),
+  latest: Schema.NullOr(Schema.Number),
+  matchedInvestmentAccountId: Schema.NullOr(InvestmentAccountId),
+  sample: Schema.Array(FidelityInvSampleRow),
+})
+
+export const ImportFidelityPreviewCommand = defineCommand(
+  "transaction.import.fidelityPreview",
+  Schema.Struct({ text: Schema.String }),
+  Schema.Struct({
+    statements: Schema.Array(FidelityStatementPreview),
+    warnings: Schema.Array(Schema.String),
+  }),
+)
+
+export const ImportFidelityCommitCommand = defineCommand(
+  "transaction.import.fidelityCommit",
+  Schema.Struct({
+    text: Schema.String,
+    assignments: Schema.Array(
+      Schema.Struct({
+        externalKey: Schema.String,
+        investmentAccountId: InvestmentAccountId,
+        linkAccount: Schema.Boolean,
+      }),
+    ),
+  }),
+  Schema.Struct({
+    perStatement: Schema.Array(
+      Schema.Struct({
+        externalKey: Schema.String,
+        investmentAccountId: InvestmentAccountId,
+        total: Schema.Number,
+        imported: Schema.Number,
+        duplicates: Schema.Number,
+        instrumentsCreated: Schema.Number,
+      }),
+    ),
     warnings: Schema.Array(Schema.String),
   }),
 )
@@ -254,6 +356,15 @@ export const ImportOfxCommitCommand = defineCommand(
         linkAccount: Schema.Boolean,
       }),
     ),
+    investmentAssignments: Schema.UndefinedOr(
+      Schema.Array(
+        Schema.Struct({
+          externalKey: Schema.String,
+          investmentAccountId: InvestmentAccountId,
+          linkAccount: Schema.Boolean,
+        }),
+      ),
+    ),
   }),
   Schema.Struct({
     perStatement: Schema.Array(
@@ -265,9 +376,199 @@ export const ImportOfxCommitCommand = defineCommand(
         duplicates: Schema.Number,
       }),
     ),
+    perInvestmentStatement: Schema.Array(
+      Schema.Struct({
+        externalKey: Schema.String,
+        investmentAccountId: InvestmentAccountId,
+        total: Schema.Number,
+        imported: Schema.Number,
+        duplicates: Schema.Number,
+        instrumentsCreated: Schema.Number,
+      }),
+    ),
     investmentStatementCount: Schema.Number,
     warnings: Schema.Array(Schema.String),
   }),
+)
+
+// -- Instrument commands ----------------------------------------------------
+
+export const InstrumentCreateCommand = defineCommand(
+  "instrument.create",
+  Schema.Struct({
+    symbol: Schema.String,
+    name: Schema.String,
+    kind: InstrumentKind,
+    currency: CurrencyCode,
+  }),
+  Instrument,
+)
+
+export const InstrumentListCommand = defineCommand(
+  "instrument.list",
+  Schema.Struct({}),
+  Schema.Array(Instrument),
+)
+
+export const InstrumentGetCommand = defineCommand(
+  "instrument.get",
+  Schema.Struct({ id: InstrumentId }),
+  Instrument,
+)
+
+export const InstrumentFindBySymbolCommand = defineCommand(
+  "instrument.findBySymbol",
+  Schema.Struct({ symbol: Schema.String }),
+  Schema.NullOr(Instrument),
+)
+
+export const InstrumentRecordPriceCommand = defineCommand(
+  "instrument.recordPrice",
+  Schema.Struct({
+    instrumentId: InstrumentId,
+    asOf: Schema.Number,
+    price: Money,
+  }),
+  Schema.Void,
+)
+
+export const InstrumentLatestPriceCommand = defineCommand(
+  "instrument.latestPrice",
+  Schema.Struct({ instrumentId: InstrumentId }),
+  Schema.NullOr(PriceQuote),
+)
+
+export const InstrumentListPricesCommand = defineCommand(
+  "instrument.listPrices",
+  Schema.Struct({
+    instrumentId: InstrumentId,
+    since: Schema.UndefinedOr(Schema.Number),
+    until: Schema.UndefinedOr(Schema.Number),
+    limit: Schema.UndefinedOr(Schema.Number),
+  }),
+  Schema.Array(PriceQuote),
+)
+
+// -- InvestmentAccount commands ---------------------------------------------
+
+export const InvestmentAccountCreateCommand = defineCommand(
+  "investmentAccount.create",
+  Schema.Struct({
+    name: Schema.String,
+    institution: Schema.NullOr(Schema.String),
+    currency: CurrencyCode,
+  }),
+  InvestmentAccount,
+)
+
+export const InvestmentAccountListCommand = defineCommand(
+  "investmentAccount.list",
+  Schema.Struct({}),
+  Schema.Array(InvestmentAccount),
+)
+
+export const InvestmentAccountGetCommand = defineCommand(
+  "investmentAccount.get",
+  Schema.Struct({ id: InvestmentAccountId }),
+  InvestmentAccount,
+)
+
+export const InvestmentAccountRenameCommand = defineCommand(
+  "investmentAccount.rename",
+  Schema.Struct({ id: InvestmentAccountId, name: Schema.String }),
+  Schema.Void,
+)
+
+export const InvestmentAccountArchiveCommand = defineCommand(
+  "investmentAccount.archive",
+  Schema.Struct({ id: InvestmentAccountId }),
+  Schema.Void,
+)
+
+export const InvestmentAccountListHoldingsCommand = defineCommand(
+  "investmentAccount.listHoldings",
+  Schema.Struct({ accountId: Schema.UndefinedOr(InvestmentAccountId) }),
+  Schema.Array(Holding),
+)
+
+export const InvestmentAccountListCashBalancesCommand = defineCommand(
+  "investmentAccount.listCashBalances",
+  Schema.Struct({ accountId: Schema.UndefinedOr(InvestmentAccountId) }),
+  Schema.Array(InvestmentCashBalance),
+)
+
+// -- Investment transaction commands ----------------------------------------
+
+export const InvestmentBuyCommand = defineCommand(
+  "investment.buy",
+  Schema.Struct({
+    accountId: InvestmentAccountId,
+    instrumentId: InstrumentId,
+    postedAt: Schema.Number,
+    quantity: Quantity,
+    pricePerShare: Money,
+    fees: Schema.UndefinedOr(Money),
+  }),
+  InvestmentTransaction,
+)
+
+export const InvestmentSellCommand = defineCommand(
+  "investment.sell",
+  Schema.Struct({
+    accountId: InvestmentAccountId,
+    instrumentId: InstrumentId,
+    postedAt: Schema.Number,
+    quantity: Quantity,
+    pricePerShare: Money,
+    fees: Schema.UndefinedOr(Money),
+  }),
+  InvestmentTransaction,
+)
+
+export const InvestmentDividendCommand = defineCommand(
+  "investment.dividend",
+  Schema.Struct({
+    accountId: InvestmentAccountId,
+    instrumentId: InstrumentId,
+    postedAt: Schema.Number,
+    amount: Money,
+  }),
+  InvestmentTransaction,
+)
+
+export const InvestmentSplitCommand = defineCommand(
+  "investment.split",
+  Schema.Struct({
+    instrumentId: InstrumentId,
+    postedAt: Schema.Number,
+    numerator: Schema.Number,
+    denominator: Schema.Number,
+  }),
+  Schema.Void,
+)
+
+export const InvestmentRecordCashFlowCommand = defineCommand(
+  "investment.recordCashFlow",
+  Schema.Struct({
+    accountId: InvestmentAccountId,
+    postedAt: Schema.Number,
+    kind: CashFlowKind,
+    amount: Money,
+    memo: Schema.NullOr(Schema.String),
+  }),
+  InvestmentTransaction,
+)
+
+export const InvestmentListCommand = defineCommand(
+  "investment.list",
+  Schema.Struct({
+    accountId: Schema.UndefinedOr(InvestmentAccountId),
+    instrumentId: Schema.UndefinedOr(InstrumentId),
+    kind: Schema.UndefinedOr(InvestmentTransactionKind),
+    limit: Schema.UndefinedOr(Schema.Number),
+    order: Schema.UndefinedOr(Schema.Literals(["posted-asc", "posted-desc"])),
+  }),
+  Schema.Array(InvestmentTransaction),
 )
 
 // -- System commands --------------------------------------------------------
@@ -514,6 +815,28 @@ export const Commands = {
   "transaction.import.commit": ImportCommitCommand,
   "transaction.import.ofxPreview": ImportOfxPreviewCommand,
   "transaction.import.ofxCommit": ImportOfxCommitCommand,
+  "transaction.import.fidelityPreview": ImportFidelityPreviewCommand,
+  "transaction.import.fidelityCommit": ImportFidelityCommitCommand,
+  "instrument.create": InstrumentCreateCommand,
+  "instrument.list": InstrumentListCommand,
+  "instrument.get": InstrumentGetCommand,
+  "instrument.findBySymbol": InstrumentFindBySymbolCommand,
+  "instrument.recordPrice": InstrumentRecordPriceCommand,
+  "instrument.latestPrice": InstrumentLatestPriceCommand,
+  "instrument.listPrices": InstrumentListPricesCommand,
+  "investmentAccount.create": InvestmentAccountCreateCommand,
+  "investmentAccount.list": InvestmentAccountListCommand,
+  "investmentAccount.get": InvestmentAccountGetCommand,
+  "investmentAccount.rename": InvestmentAccountRenameCommand,
+  "investmentAccount.archive": InvestmentAccountArchiveCommand,
+  "investmentAccount.listHoldings": InvestmentAccountListHoldingsCommand,
+  "investmentAccount.listCashBalances": InvestmentAccountListCashBalancesCommand,
+  "investment.buy": InvestmentBuyCommand,
+  "investment.sell": InvestmentSellCommand,
+  "investment.dividend": InvestmentDividendCommand,
+  "investment.split": InvestmentSplitCommand,
+  "investment.recordCashFlow": InvestmentRecordCashFlowCommand,
+  "investment.list": InvestmentListCommand,
   "system.stats": SystemStatsCommand,
   "system.export": SystemExportCommand,
   "system.import": SystemImportCommand,

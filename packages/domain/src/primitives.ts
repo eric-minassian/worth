@@ -14,6 +14,17 @@ export type TransactionId = Schema.Schema.Type<typeof TransactionId>
 export const CategoryId = Schema.String.pipe(Schema.brand("CategoryId"))
 export type CategoryId = Schema.Schema.Type<typeof CategoryId>
 
+export const InvestmentAccountId = Schema.String.pipe(Schema.brand("InvestmentAccountId"))
+export type InvestmentAccountId = Schema.Schema.Type<typeof InvestmentAccountId>
+
+export const InstrumentId = Schema.String.pipe(Schema.brand("InstrumentId"))
+export type InstrumentId = Schema.Schema.Type<typeof InstrumentId>
+
+export const InvestmentTransactionId = Schema.String.pipe(
+  Schema.brand("InvestmentTransactionId"),
+)
+export type InvestmentTransactionId = Schema.Schema.Type<typeof InvestmentTransactionId>
+
 export const EventId = Schema.String.pipe(Schema.brand("EventId"))
 export type EventId = Schema.Schema.Type<typeof EventId>
 
@@ -49,3 +60,14 @@ export const money = (minor: bigint, currency: CurrencyCode = USD): Money => ({
   minor,
   currency,
 })
+
+// -- Quantity ---------------------------------------------------------------
+//
+// Fractional-share quantity. Held as a signed bigint in integer micro-share
+// units (1e-8 per unit) so fractional shares survive lossless arithmetic.
+// Negative values are permitted for short positions and lot reductions.
+
+export const QUANTITY_SCALE = 100_000_000n
+
+export const Quantity = Schema.BigIntFromString.pipe(Schema.brand("Quantity"))
+export type Quantity = Schema.Schema.Type<typeof Quantity>

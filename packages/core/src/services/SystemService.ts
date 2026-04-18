@@ -88,6 +88,13 @@ export const SystemServiceLive = Layer.effect(SystemService)(
           tx.delete(schema.categories).run()
           tx.delete(schema.accountExternalKeys).run()
           tx.delete(schema.accounts).run()
+          tx.delete(schema.holdings).run()
+          tx.delete(schema.lots).run()
+          tx.delete(schema.investmentTransactions).run()
+          tx.delete(schema.priceQuotes).run()
+          tx.delete(schema.investmentAccountExternalKeys).run()
+          tx.delete(schema.investmentAccounts).run()
+          tx.delete(schema.instruments).run()
           const rows = tx
             .select()
             .from(schema.events)

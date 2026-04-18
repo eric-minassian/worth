@@ -1,4 +1,10 @@
-import { createRootRoute, createRoute, createRouter, Outlet } from "@tanstack/react-router"
+import {
+  createHashHistory,
+  createRootRoute,
+  createRoute,
+  createRouter,
+  Outlet,
+} from "@tanstack/react-router"
 import { Layout } from "./Layout"
 import { Dashboard } from "./pages/Dashboard"
 import { AccountsPage } from "./pages/AccountsPage"
@@ -68,7 +74,11 @@ const routeTree = rootRoute.addChildren([
   settingsRoute,
 ])
 
-export const router = createRouter({ routeTree, defaultPreload: "intent" })
+export const router = createRouter({
+  routeTree,
+  defaultPreload: "intent",
+  history: createHashHistory(),
+})
 
 declare module "@tanstack/react-router" {
   interface Register {

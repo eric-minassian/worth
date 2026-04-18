@@ -78,7 +78,7 @@ export interface OfxStatementPreview {
   readonly sample: readonly OfxSampleRow[]
 }
 
-export interface OfxInvSampleRow {
+export interface InvSampleRow {
   readonly kind: "buy" | "sell" | "dividend" | "reinvest" | "cash"
   readonly tradeDate: number
   readonly symbol: string | null
@@ -100,7 +100,7 @@ export interface OfxInvStatementPreview {
   readonly earliest: number | null
   readonly latest: number | null
   readonly matchedInvestmentAccountId: InvestmentAccountId | null
-  readonly sample: readonly OfxInvSampleRow[]
+  readonly sample: readonly InvSampleRow[]
 }
 
 export interface OfxPreview {
@@ -157,16 +157,6 @@ export interface OfxCommitResult {
 // Fidelity's Accounts_History.csv shape parallels OFX investment statements
 // but with multi-account grouping by the CSV's `Account Number` column.
 
-export interface FidelityInvSampleRow {
-  readonly kind: "buy" | "sell" | "dividend" | "reinvest" | "cash"
-  readonly tradeDate: number
-  readonly symbol: string | null
-  readonly securityName: string
-  readonly units: string | null
-  readonly unitPriceMinor: string | null
-  readonly totalMinor: string
-}
-
 export interface FidelityStatementPreview {
   readonly externalKey: string
   readonly accountNumber: string
@@ -179,7 +169,7 @@ export interface FidelityStatementPreview {
   readonly earliest: number | null
   readonly latest: number | null
   readonly matchedInvestmentAccountId: InvestmentAccountId | null
-  readonly sample: readonly FidelityInvSampleRow[]
+  readonly sample: readonly InvSampleRow[]
 }
 
 export interface FidelityPreview {
@@ -323,8 +313,6 @@ const instrumentIdFromFidelityKey = (key: FidelityInstrumentKey): InstrumentId =
 
 const fidelityInstrumentSymbol = (key: FidelityInstrumentKey): string =>
   key.kind === "symbol" ? key.symbol : key.name
-
-const fidelityInstrumentName = (key: FidelityInstrumentKey): string => key.name
 
 /**
  * 401(k) fund rows have no ticker — kind defaults to "mutual_fund" because
@@ -552,7 +540,7 @@ export const ImportServiceLive = Layer.effect(ImportService)(
               earliest,
               latest,
               matchedInvestmentAccountId: investmentAccountIdByExternalKey(key),
-              sample: s.transactions.slice(0, 5).map((t): OfxInvSampleRow => {
+              sample: s.transactions.slice(0, 5).map((t): InvSampleRow => {
                 if (t.kind === "cash") {
                   return {
                     kind: "cash",
@@ -933,7 +921,7 @@ export const ImportServiceLive = Layer.effect(ImportService)(
               latest,
               matchedInvestmentAccountId: investmentAccountIdByExternalKey(key),
               sample: s.transactions.slice(0, 5).map(
-                (t): FidelityInvSampleRow => {
+                (t): InvSampleRow => {
                   if (t.kind === "cash") {
                     return {
                       kind: "cash",
@@ -952,7 +940,7 @@ export const ImportServiceLive = Layer.effect(ImportService)(
                       t.instrumentKey.kind === "symbol"
                         ? t.instrumentKey.symbol
                         : null,
-                    securityName: fidelityInstrumentName(t.instrumentKey),
+                    securityName: t.instrumentKey.name,
                     units: "units" in t ? t.units.toString() : null,
                     unitPriceMinor:
                       "unitPriceMinor" in t ? t.unitPriceMinor.toString() : null,
@@ -1042,21 +1030,20 @@ export const ImportServiceLive = Layer.effect(ImportService)(
                 ? instrumentIdBySymbol(txn.instrumentKey.symbol)
                 : null
             const instrumentId = existingIdByTicker ?? derivedId
-            const instrumentCacheKey = instrumentId
             if (
               !instrumentExistsById(instrumentId) &&
-              !createdThisPass.has(instrumentCacheKey)
+              !createdThisPass.has(instrumentId)
             ) {
               yield* log.append({
                 _tag: "InstrumentCreated",
                 id: instrumentId,
                 symbol: fidelityInstrumentSymbol(txn.instrumentKey),
-                name: fidelityInstrumentName(txn.instrumentKey),
+                name: txn.instrumentKey.name,
                 kind: fidelityInstrumentKind(txn.instrumentKey),
                 currency,
                 at: Date.now(),
               })
-              createdThisPass.add(instrumentCacheKey)
+              createdThisPass.add(instrumentId)
               instrumentsCreated++
             }
 

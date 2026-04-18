@@ -1,3 +1,4 @@
+import { QUANTITY_SCALE } from "@worth/domain"
 import { parseAmount, parseQuantity } from "./money"
 
 // -- Types ------------------------------------------------------------------
@@ -583,7 +584,7 @@ const parseReinvestInvTransaction = (
   const totalRawMinor =
     totalRaw !== null
       ? parseAmount(totalRaw) ?? 0n
-      : (units * unitPriceMinor) / 100_000_000n
+      : (units * unitPriceMinor) / QUANTITY_SCALE
   const totalMinor = totalRawMinor < 0n ? -totalRawMinor : totalRawMinor
   return {
     kind: "reinvest",
@@ -638,7 +639,7 @@ const fallbackTotal = (
   unitPriceMinor: bigint,
   feesMinor: bigint,
 ): bigint => {
-  const gross = (units * unitPriceMinor) / 100_000_000n
+  const gross = (units * unitPriceMinor) / QUANTITY_SCALE
   return kind === "buy" ? -(gross + feesMinor) : gross - feesMinor
 }
 

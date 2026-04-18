@@ -11,6 +11,7 @@ import type {
   InvestmentAccountId,
   InvestmentTransactionKind,
   Money,
+  Quantity,
 } from "@worth/domain"
 import {
   Badge,
@@ -52,10 +53,12 @@ import {
   investmentTransactionsQuery,
 } from "../lib/queries"
 import {
+  amountClass,
   formatDate,
   formatMoney,
   formatQuantity,
   INSTRUMENT_KIND_LABEL,
+  QUANTITY_SCALE,
   parseMoneyMinor,
   parseQuantityInput,
   toDateInput,
@@ -63,9 +66,15 @@ import {
 } from "../lib/format"
 import { PageActions } from "../Layout"
 
-const COMMON_CURRENCIES: readonly CurrencyCode[] = (
-  ["USD", "EUR", "GBP", "CAD", "AUD", "JPY", "CHF"] as readonly string[]
-).map((c) => c as CurrencyCode)
+const COMMON_CURRENCIES: readonly CurrencyCode[] = [
+  "USD",
+  "EUR",
+  "GBP",
+  "CAD",
+  "AUD",
+  "JPY",
+  "CHF",
+].map((c) => c as CurrencyCode)
 
 const INSTRUMENT_KINDS: readonly InstrumentKind[] = [
   "stock",
@@ -279,7 +288,7 @@ export const InvestmentsPage = () => {
                   const account = accountById.get(h.accountId)
                   const avgCost =
                     h.quantity > 0n
-                      ? (h.costBasis.minor * 100_000_000n) / h.quantity
+                      ? (h.costBasis.minor * QUANTITY_SCALE) / h.quantity
                       : 0n
                   return (
                     <TableRow key={`${h.accountId}:${h.instrumentId}`}>
@@ -421,13 +430,7 @@ export const InvestmentsPage = () => {
                       <TableCell className="text-right tabular-nums text-xs">
                         {t.pricePerShare ? formatMoney(t.pricePerShare) : "—"}
                       </TableCell>
-                      <TableCell
-                        className={
-                          t.amount.minor < 0n
-                            ? "text-right font-medium tabular-nums text-destructive"
-                            : "text-right font-medium tabular-nums text-emerald-600 dark:text-emerald-400"
-                        }
-                      >
+                      <TableCell className={amountClass(t.amount.minor)}>
                         {formatMoney(t.amount)}
                       </TableCell>
                     </TableRow>
@@ -579,7 +582,6 @@ const RecordInvestmentDialog = ({
   )
   const [postedAt, setPostedAt] = useState(toDateInput(Date.now()))
 
-  // Instrument mode: pick existing, or create inline.
   const [instrumentMode, setInstrumentMode] = useState<"existing" | "new">(
     instruments.length > 0 ? "existing" : "new",
   )
@@ -605,7 +607,6 @@ const RecordInvestmentDialog = ({
       if (accountId === "") throw new Error("Account is required")
       const postedAtMs = fromDateInput(postedAt)
 
-      // Resolve or create the instrument.
       let resolvedInstrumentId: InstrumentId
       if (instrumentMode === "existing") {
         if (instrumentId === "") throw new Error("Instrument is required")
@@ -650,7 +651,7 @@ const RecordInvestmentDialog = ({
         accountId,
         instrumentId: resolvedInstrumentId,
         postedAt: postedAtMs,
-        quantity: qtyMinor as never,
+        quantity: qtyMinor as Quantity,
         pricePerShare: { minor: priceMinor, currency },
         fees: { minor: feesMinor, currency } as Money,
       }

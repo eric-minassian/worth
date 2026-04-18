@@ -33,7 +33,9 @@ import {
 } from "@worth/ui"
 import { callCommand, formatRpcError } from "../rpc"
 import { invalidationKeys, investmentAccountsQuery } from "../lib/queries"
-import { formatDate } from "../lib/format"
+import { formatDate, formatQuantity } from "../lib/format"
+
+const SKIP_VALUE = "__skip__"
 
 type ColumnRole = "date" | "payee" | "amount" | "memo" | "skip"
 type CsvPreview = OutputOf<"transaction.import.preview">
@@ -679,14 +681,14 @@ const OfxImportFlow = ({ text, filename, accounts, onClose, onError }: FlowProps
                 <Select
                   value={
                     choice.skip
-                      ? "__skip__"
+                      ? SKIP_VALUE
                       : choice.investmentAccountId ?? ""
                   }
                   onValueChange={(v) =>
                     setInvChoices({
                       ...invChoices,
                       [s.externalKey]:
-                        v === "__skip__"
+                        v === SKIP_VALUE
                           ? { ...choice, skip: true }
                           : {
                               ...choice,
@@ -706,7 +708,7 @@ const OfxImportFlow = ({ text, filename, accounts, onClose, onError }: FlowProps
                         {a.name}
                       </SelectItem>
                     ))}
-                    <SelectItem value="__skip__">
+                    <SelectItem value={SKIP_VALUE}>
                       Skip this statement
                     </SelectItem>
                   </SelectContent>
@@ -764,7 +766,7 @@ const OfxImportFlow = ({ text, filename, accounts, onClose, onError }: FlowProps
                           {r.symbol ?? r.securityName}
                         </TableCell>
                         <TableCell className="text-right font-mono text-xs">
-                          {r.units ? formatOfxQuantity(r.units) : "—"}
+                          {r.units ? formatQuantity(BigInt(r.units), 4) : "—"}
                         </TableCell>
                         <TableCell className="text-right font-mono text-xs">
                           {formatOfxAmount(r.totalMinor, s.currency)}
@@ -805,18 +807,6 @@ const formatOfxAmount = (minorStr: string, currency: string | null): string => {
   const sign = negative ? "-" : ""
   if (currency) return `${sign}${whole}.${frac} ${currency}`
   return `${sign}${whole}.${frac}`
-}
-
-/** Shares are serialized at 1e-8 micro-units on the wire; render with up to 4 decimals. */
-const formatOfxQuantity = (microStr: string): string => {
-  const units = BigInt(microStr)
-  const negative = units < 0n
-  const abs = negative ? -units : units
-  const whole = abs / 100_000_000n
-  const frac = (abs % 100_000_000n).toString().padStart(8, "0").slice(0, 4)
-  const trimmed = frac.replace(/0+$/, "")
-  const body = trimmed ? `${whole}.${trimmed}` : whole.toString()
-  return negative ? `-${body}` : body
 }
 
 const OfxResultView = ({
@@ -1077,14 +1067,14 @@ const FidelityImportFlow = ({
                 <Select
                   value={
                     choice.skip
-                      ? "__skip__"
+                      ? SKIP_VALUE
                       : choice.investmentAccountId ?? ""
                   }
                   onValueChange={(v) =>
                     setChoices({
                       ...choices,
                       [s.externalKey]:
-                        v === "__skip__"
+                        v === SKIP_VALUE
                           ? { ...choice, skip: true }
                           : {
                               ...choice,
@@ -1104,7 +1094,7 @@ const FidelityImportFlow = ({
                         {a.name}
                       </SelectItem>
                     ))}
-                    <SelectItem value="__skip__">
+                    <SelectItem value={SKIP_VALUE}>
                       Skip this statement
                     </SelectItem>
                   </SelectContent>
@@ -1158,7 +1148,7 @@ const FidelityImportFlow = ({
                           {r.symbol ?? r.securityName}
                         </TableCell>
                         <TableCell className="text-right font-mono text-xs">
-                          {r.units ? formatOfxQuantity(r.units) : "—"}
+                          {r.units ? formatQuantity(BigInt(r.units), 4) : "—"}
                         </TableCell>
                         <TableCell className="text-right font-mono text-xs">
                           {formatOfxAmount(r.totalMinor, "USD")}

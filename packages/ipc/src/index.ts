@@ -245,7 +245,7 @@ const OfxStatementPreview = Schema.Struct({
   sample: Schema.Array(OfxSampleRow),
 })
 
-const OfxInvSampleRow = Schema.Struct({
+const InvSampleRow = Schema.Struct({
   kind: Schema.Literals(["buy", "sell", "dividend", "reinvest", "cash"]),
   tradeDate: Schema.Number,
   symbol: Schema.NullOr(Schema.String),
@@ -267,7 +267,7 @@ const OfxInvStatementPreview = Schema.Struct({
   earliest: Schema.NullOr(Schema.Number),
   latest: Schema.NullOr(Schema.Number),
   matchedInvestmentAccountId: Schema.NullOr(InvestmentAccountId),
-  sample: Schema.Array(OfxInvSampleRow),
+  sample: Schema.Array(InvSampleRow),
 })
 
 export const ImportOfxPreviewCommand = defineCommand(
@@ -284,16 +284,6 @@ export const ImportOfxPreviewCommand = defineCommand(
 // Fidelity CSV — Accounts_History.csv style export. Shape parallels OFX
 // investment import (multi-account grouping by CSV Account Number column).
 
-const FidelityInvSampleRow = Schema.Struct({
-  kind: Schema.Literals(["buy", "sell", "dividend", "reinvest", "cash"]),
-  tradeDate: Schema.Number,
-  symbol: Schema.NullOr(Schema.String),
-  securityName: Schema.String,
-  units: Schema.NullOr(Schema.String),
-  unitPriceMinor: Schema.NullOr(Schema.String),
-  totalMinor: Schema.String,
-})
-
 const FidelityStatementPreview = Schema.Struct({
   externalKey: Schema.String,
   accountNumber: Schema.String,
@@ -306,7 +296,7 @@ const FidelityStatementPreview = Schema.Struct({
   earliest: Schema.NullOr(Schema.Number),
   latest: Schema.NullOr(Schema.Number),
   matchedInvestmentAccountId: Schema.NullOr(InvestmentAccountId),
-  sample: Schema.Array(FidelityInvSampleRow),
+  sample: Schema.Array(InvSampleRow),
 })
 
 export const ImportFidelityPreviewCommand = defineCommand(

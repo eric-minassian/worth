@@ -1,4 +1,5 @@
 import { createHash } from "node:crypto"
+import { QUANTITY_SCALE } from "@worth/domain"
 import { parseCsv } from "./csv"
 import { parseAmount, parseQuantity } from "./money"
 
@@ -522,7 +523,7 @@ const buildContribution = (
   if (units === null || units === 0n) {
     // units (micro) = (amount_minor / price_minor) * QUANTITY_SCALE — all
     // in bigint to avoid precision loss on small contributions.
-    units = (amount * 100_000_000n) / priceMinor
+    units = (amount * QUANTITY_SCALE) / priceMinor
   } else if (units < 0n) {
     units = -units
   }
@@ -551,7 +552,7 @@ const fallbackTotal = (
   unitPriceMinor: bigint,
   feesMinor: bigint,
 ): bigint => {
-  const gross = (units * unitPriceMinor) / 100_000_000n
+  const gross = (units * unitPriceMinor) / QUANTITY_SCALE
   return kind === "buy" ? -(gross + feesMinor) : gross - feesMinor
 }
 

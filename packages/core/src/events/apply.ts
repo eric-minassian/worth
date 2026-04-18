@@ -1,4 +1,4 @@
-import { and, asc, eq, isNotNull } from "drizzle-orm"
+import { and, asc, eq, gt, isNotNull } from "drizzle-orm"
 import type { DrizzleClient } from "@worth/db"
 import { schema } from "@worth/db"
 import type {
@@ -360,13 +360,13 @@ const applySell = (db: DrizzleClient, event: InvestmentSellRecorded): void => {
       and(
         eq(schema.lots.accountId, event.accountId),
         eq(schema.lots.instrumentId, event.instrumentId),
+        gt(schema.lots.remainingQuantity, 0),
       ),
     )
     .orderBy(asc(schema.lots.openedAt), asc(schema.lots.id))
     .all()
   for (const lot of openLots) {
     if (toConsume === 0) break
-    if (lot.remainingQuantity <= 0) continue
     const take = lot.remainingQuantity < toConsume ? lot.remainingQuantity : toConsume
     const takeBasis =
       take === lot.remainingQuantity

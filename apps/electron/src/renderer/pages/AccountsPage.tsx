@@ -40,6 +40,7 @@ import {
   SelectTrigger,
   SelectValue,
   Separator,
+  Skeleton,
   Table,
   TableBody,
   TableCell,
@@ -56,6 +57,7 @@ import {
 } from "../lib/queries"
 import { ACCOUNT_TYPE_LABEL, formatDate, formatMoney } from "../lib/format"
 import { PageActions } from "../Layout"
+import { TableSkeletonRows } from "../components/TableSkeletonRows"
 
 const ACCOUNT_TYPES: readonly AccountType[] = [
   "checking",
@@ -126,6 +128,23 @@ export const AccountsPage = () => {
         </Dialog>
       </PageActions>
 
+      {accounts.isPending ? (
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+          {Array.from({ length: 3 }).map((_, i) => (
+            <Card key={i}>
+              <CardHeader>
+                <Skeleton className="h-3 w-16" />
+                <Skeleton className="mt-2 h-5 w-24" />
+              </CardHeader>
+              <Separator />
+              <CardContent>
+                <Skeleton className="h-3 w-20" />
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+      ) : null}
+
       {accounts.data && accounts.data.length > 0 && (
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
           {ACCOUNT_TYPES.map((type) => {
@@ -175,7 +194,9 @@ export const AccountsPage = () => {
             </TableRow>
           </TableHeader>
           <TableBody>
-            {accounts.data && accounts.data.length > 0 ? (
+            {accounts.isPending ? (
+              <TableSkeletonRows cols={6} rows={4} />
+            ) : accounts.data && accounts.data.length > 0 ? (
               accounts.data.map((account) => {
                 const bal = balances.get(account.id) ?? 0n
                 return (

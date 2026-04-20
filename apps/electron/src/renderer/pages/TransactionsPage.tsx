@@ -1,4 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
+import { useVirtualizer } from "@tanstack/react-virtual"
 import {
   ArrowDownRight,
   ArrowUpRight,
@@ -9,9 +10,21 @@ import {
   Trash2,
   X,
 } from "lucide-react"
-import { useMemo, useState, type FormEvent } from "react"
+import {
+  memo,
+  useDeferredValue,
+  useMemo,
+  useRef,
+  useState,
+  type FormEvent,
+} from "react"
 
-import type { AccountId, CategoryId, TransactionId } from "@worth/domain"
+import type {
+  AccountId,
+  CategoryId,
+  Transaction,
+  TransactionId,
+} from "@worth/domain"
 import {
   AlertDialog,
   AlertDialogAction,
@@ -24,6 +37,7 @@ import {
   Badge,
   Button,
   buttonVariants,
+  cn,
   Dialog,
   DialogContent,
   DialogDescription,
@@ -44,12 +58,7 @@ import {
   SelectItem,
   SelectTrigger,
   SelectValue,
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
+  Skeleton,
   toast,
 } from "@worth/ui"
 import { callCommand, formatRpcError } from "../rpc"
@@ -74,10 +83,15 @@ const ALL_ACCOUNTS = "__all_accounts__"
 const ALL_CATEGORIES = "__all_categories__"
 const UNCATEGORIZED = "__uncategorized__"
 
+const ROW_HEIGHT = 48
+const GRID_COLS =
+  "grid-cols-[110px_minmax(0,1fr)_140px_170px_140px_36px]"
+
 export const TransactionsPage = () => {
   const [accountFilter, setAccountFilter] = useState<string>(ALL_ACCOUNTS)
   const [categoryFilter, setCategoryFilter] = useState<string>(ALL_CATEGORIES)
   const [search, setSearch] = useState("")
+  const deferredSearch = useDeferredValue(search)
   const [open, setOpen] = useState(false)
   const [importOpen, setImportOpen] = useState(false)
 
@@ -87,7 +101,7 @@ export const TransactionsPage = () => {
     transactionsQuery({
       accountId:
         accountFilter === ALL_ACCOUNTS ? undefined : (accountFilter as AccountId),
-      search: search.trim() === "" ? undefined : search.trim(),
+      search: deferredSearch.trim() === "" ? undefined : deferredSearch.trim(),
       limit: 1000,
       order: "posted-desc",
     }),
@@ -117,8 +131,12 @@ export const TransactionsPage = () => {
     accountFilter !== ALL_ACCOUNTS ||
     categoryFilter !== ALL_CATEGORIES
 
+  const isLoading = transactions.isPending || accounts.isPending
+
+  // Bounded height required; the virtualizer falls back to rendering the
+  // full list without it.
   return (
-    <div className="mx-auto flex max-w-7xl flex-col gap-5 px-8 py-6">
+    <div className="mx-auto flex w-full max-w-7xl flex-col gap-5 px-8 py-6 h-[calc(100dvh-2.75rem)]">
       <PageActions>
         <Dialog open={importOpen} onOpenChange={setImportOpen}>
           <DialogTrigger asChild>
@@ -195,91 +213,207 @@ export const TransactionsPage = () => {
           </Button>
         )}
         <span className="ml-auto text-xs text-muted-foreground">
-          {filteredByCategory.length} of {transactions.data?.length ?? 0}
+          {isLoading ? (
+            <Skeleton className="h-3 w-16" />
+          ) : (
+            `${filteredByCategory.length} of ${transactions.data?.length ?? 0}`
+          )}
         </span>
       </div>
 
-      <div className="rounded-lg border bg-card">
-        <Table>
-          <TableHeader className="sticky top-0 z-[1] bg-card shadow-[inset_0_-1px_0] shadow-border">
-            <TableRow>
-              <TableHead>Date</TableHead>
-              <TableHead className="w-full">Payee</TableHead>
-              <TableHead>Account</TableHead>
-              <TableHead>Category</TableHead>
-              <TableHead className="text-right">Amount</TableHead>
-              <TableHead className="w-9" />
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {filteredByCategory.length > 0 ? (
-              filteredByCategory.map((txn) => (
-                <TableRow key={txn.id} className="group">
-                  <TableCell className="text-xs text-muted-foreground tabular-nums">
-                    {formatDate(txn.postedAt)}
-                  </TableCell>
-                  <TableCell className="max-w-0 font-medium">
-                    <div className="flex flex-col">
-                      <span className="truncate" title={txn.payee}>
-                        {txn.payee}
-                      </span>
-                      {txn.memo && (
-                        <span
-                          className="truncate text-xs text-muted-foreground"
-                          title={txn.memo}
-                        >
-                          {txn.memo}
-                        </span>
-                      )}
-                    </div>
-                  </TableCell>
-                  <TableCell>
-                    <Badge variant="outline" className="font-normal">
-                      {accountById.get(txn.accountId)?.name ?? "—"}
-                    </Badge>
-                  </TableCell>
-                  <TableCell>
-                    <CategoryPicker
-                      txnId={txn.id}
-                      value={txn.categoryId}
-                      categories={categories.data ?? []}
-                      categoryById={categoryById}
-                      accountId={txn.accountId}
-                    />
-                  </TableCell>
-                  <TableCell className={amountClass(txn.amount.minor)}>
-                    <span className="inline-flex items-center justify-end gap-1">
-                      {txn.amount.minor < 0n ? (
-                        <ArrowDownRight className="size-3" />
-                      ) : (
-                        <ArrowUpRight className="size-3" />
-                      )}
-                      {formatMoney(txn.amount)}
-                    </span>
-                  </TableCell>
-                  <TableCell>
-                    <TransactionRowMenu txnId={txn.id} payee={txn.payee} />
-                  </TableCell>
-                </TableRow>
-              ))
-            ) : (
-              <TableRow>
-                <TableCell
-                  colSpan={6}
-                  className="py-12 text-center text-xs text-muted-foreground"
-                >
-                  {hasAccounts
-                    ? "No transactions match. Add one or adjust filters."
-                    : "Create an account first, then add transactions."}
-                </TableCell>
-              </TableRow>
-            )}
-          </TableBody>
-        </Table>
+      <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-lg border bg-card">
+        <div
+          className={cn(
+            "grid shrink-0 items-center border-b bg-card px-3 py-2 text-xs font-medium text-muted-foreground",
+            GRID_COLS,
+          )}
+        >
+          <span>Date</span>
+          <span>Payee</span>
+          <span>Account</span>
+          <span>Category</span>
+          <span className="text-right">Amount</span>
+          <span />
+        </div>
+        {isLoading ? (
+          <TransactionListSkeleton />
+        ) : filteredByCategory.length > 0 ? (
+          <VirtualizedTransactionList
+            transactions={filteredByCategory}
+            accountById={accountById}
+            categoryById={categoryById}
+            categories={categories.data ?? []}
+          />
+        ) : (
+          <div className="flex flex-1 items-center justify-center px-6 py-12 text-center text-xs text-muted-foreground">
+            {hasAccounts
+              ? "No transactions match. Add one or adjust filters."
+              : "Create an account first, then add transactions."}
+          </div>
+        )}
       </div>
     </div>
   )
 }
+
+interface VirtualizedTransactionListProps {
+  readonly transactions: readonly Transaction[]
+  readonly accountById: ReadonlyMap<AccountId, { name: string }>
+  readonly categoryById: ReadonlyMap<
+    CategoryId,
+    { name: string; color: string | null }
+  >
+  readonly categories: readonly { id: CategoryId; name: string }[]
+}
+
+const VirtualizedTransactionList = ({
+  transactions,
+  accountById,
+  categoryById,
+  categories,
+}: VirtualizedTransactionListProps) => {
+  const parentRef = useRef<HTMLDivElement>(null)
+  const virtualizer = useVirtualizer({
+    count: transactions.length,
+    getScrollElement: () => parentRef.current,
+    estimateSize: () => ROW_HEIGHT,
+    overscan: 6,
+    getItemKey: (i) => transactions[i]?.id ?? i,
+  })
+
+  const items = virtualizer.getVirtualItems()
+  const totalSize = virtualizer.getTotalSize()
+
+  return (
+    <div ref={parentRef} className="min-h-0 flex-1 overflow-auto">
+      <div
+        className="relative w-full"
+        style={{ height: `${totalSize}px` }}
+      >
+        {items.map((virtualRow) => {
+          const txn = transactions[virtualRow.index]
+          if (!txn) return null
+          const accountName = accountById.get(txn.accountId)?.name ?? "—"
+          return (
+            <TransactionRow
+              key={virtualRow.key}
+              txn={txn}
+              accountName={accountName}
+              categoryById={categoryById}
+              categories={categories}
+              size={virtualRow.size}
+              start={virtualRow.start}
+            />
+          )
+        })}
+      </div>
+    </div>
+  )
+}
+
+interface TransactionRowProps {
+  readonly txn: Transaction
+  readonly accountName: string
+  readonly categoryById: ReadonlyMap<
+    CategoryId,
+    { name: string; color: string | null }
+  >
+  readonly categories: readonly { id: CategoryId; name: string }[]
+  readonly size: number
+  readonly start: number
+}
+
+const TransactionRow = memo(function TransactionRow({
+  txn,
+  accountName,
+  categoryById,
+  categories,
+  size,
+  start,
+}: TransactionRowProps) {
+  return (
+    <div
+      className={cn(
+        "group absolute top-0 left-0 grid w-full items-center border-b px-3 text-sm",
+        GRID_COLS,
+      )}
+      style={{
+        height: `${size}px`,
+        transform: `translateY(${start}px)`,
+      }}
+    >
+      <span className="text-xs text-muted-foreground tabular-nums">
+        {formatDate(txn.postedAt)}
+      </span>
+      <div className="flex min-w-0 flex-col pr-2">
+        <span className="truncate font-medium" title={txn.payee}>
+          {txn.payee}
+        </span>
+        {txn.memo && (
+          <span
+            className="truncate text-xs text-muted-foreground"
+            title={txn.memo}
+          >
+            {txn.memo}
+          </span>
+        )}
+      </div>
+      <div className="min-w-0">
+        <Badge
+          variant="outline"
+          className="max-w-full truncate font-normal"
+        >
+          {accountName}
+        </Badge>
+      </div>
+      <div className="min-w-0">
+        <CategoryPicker
+          txnId={txn.id}
+          value={txn.categoryId}
+          categories={categories}
+          categoryById={categoryById}
+          accountId={txn.accountId}
+        />
+      </div>
+      <span
+        className={cn(
+          amountClass(txn.amount.minor),
+          "inline-flex items-center justify-end gap-1 pr-1",
+        )}
+      >
+        {txn.amount.minor < 0n ? (
+          <ArrowDownRight className="size-3" />
+        ) : (
+          <ArrowUpRight className="size-3" />
+        )}
+        {formatMoney(txn.amount)}
+      </span>
+      <TransactionRowMenu txnId={txn.id} payee={txn.payee} />
+    </div>
+  )
+})
+
+const TransactionListSkeleton = () => (
+  <div className="flex min-h-0 flex-1 flex-col">
+    {Array.from({ length: 12 }).map((_, i) => (
+      <div
+        key={i}
+        className={cn(
+          "grid items-center border-b px-3 py-3",
+          GRID_COLS,
+        )}
+        style={{ height: ROW_HEIGHT }}
+      >
+        <Skeleton className="h-3 w-16" />
+        <Skeleton className="h-3 w-40" />
+        <Skeleton className="h-5 w-20" />
+        <Skeleton className="h-7 w-40" />
+        <Skeleton className="h-3 w-20 justify-self-end" />
+        <span />
+      </div>
+    ))}
+  </div>
+)
 
 interface CategoryPickerProps {
   readonly txnId: TransactionId

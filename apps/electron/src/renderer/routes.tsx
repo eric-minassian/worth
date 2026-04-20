@@ -13,6 +13,27 @@ import { DuplicatesPage } from "./pages/DuplicatesPage"
 import { CategoriesPage } from "./pages/CategoriesPage"
 import { InvestmentsPage } from "./pages/Investments"
 import { SettingsPage } from "./pages/SettingsPage"
+import { queryClient } from "./lib/queryClient"
+import {
+  accountsQuery,
+  cashBalancesQuery,
+  categoriesQuery,
+  holdingsQuery,
+  instrumentsQuery,
+  investmentAccountsQuery,
+  investmentTransactionsQuery,
+  transactionsQuery,
+} from "./lib/queries"
+
+// Loaders prefetch but never await — a cold cache still paints skeletons
+// while the fetch populates the cache in the background.
+
+const allTransactionsFilter = (limit: number) => ({
+  accountId: undefined,
+  search: undefined,
+  limit,
+  order: "posted-desc" as const,
+})
 
 const rootRoute = createRootRoute({
   component: () => (
@@ -25,36 +46,71 @@ const rootRoute = createRootRoute({
 const indexRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "/",
+  loader: () => {
+    void queryClient.prefetchQuery(accountsQuery)
+    void queryClient.prefetchQuery(categoriesQuery)
+    void queryClient.prefetchQuery(transactionsQuery(allTransactionsFilter(5000)))
+  },
   component: Dashboard,
 })
 
 const accountsRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "/accounts",
+  loader: () => {
+    void queryClient.prefetchQuery(accountsQuery)
+    void queryClient.prefetchQuery(transactionsQuery(allTransactionsFilter(5000)))
+  },
   component: AccountsPage,
 })
 
 const transactionsRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "/transactions",
+  loader: () => {
+    void queryClient.prefetchQuery(accountsQuery)
+    void queryClient.prefetchQuery(categoriesQuery)
+    void queryClient.prefetchQuery(transactionsQuery(allTransactionsFilter(1000)))
+  },
   component: TransactionsPage,
 })
 
 const duplicatesRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "/duplicates",
+  loader: () => {
+    void queryClient.prefetchQuery(accountsQuery)
+  },
   component: DuplicatesPage,
 })
 
 const categoriesRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "/categories",
+  loader: () => {
+    void queryClient.prefetchQuery(categoriesQuery)
+  },
   component: CategoriesPage,
 })
 
 const investmentsRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "/investments",
+  loader: () => {
+    void queryClient.prefetchQuery(investmentAccountsQuery)
+    void queryClient.prefetchQuery(instrumentsQuery)
+    void queryClient.prefetchQuery(holdingsQuery(undefined))
+    void queryClient.prefetchQuery(cashBalancesQuery(undefined))
+    void queryClient.prefetchQuery(
+      investmentTransactionsQuery({
+        accountId: undefined,
+        instrumentId: undefined,
+        kind: undefined,
+        limit: 25,
+        order: "posted-desc",
+      }),
+    )
+  },
   component: InvestmentsPage,
 })
 

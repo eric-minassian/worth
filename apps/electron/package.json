@@ -16,6 +16,7 @@
   "dependencies": {
     "@tanstack/react-query": "^5.99.0",
     "@tanstack/react-router": "^1.168.22",
+    "@tanstack/react-virtual": "^3.13.24",
     "@worth/core": "workspace:*",
     "@worth/db": "workspace:*",
     "@worth/domain": "workspace:*",

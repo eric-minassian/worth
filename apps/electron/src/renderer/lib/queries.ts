@@ -3,35 +3,45 @@ import type { AccountId, InvestmentAccountId } from "@worth/domain"
 import type { InputOf } from "@worth/ipc"
 import { callCommand } from "../rpc"
 
+// Mutations explicitly invalidate what they touch, so a long stale window
+// is safe and keeps nav instant.
+const STALE_MS = 60_000
+const GC_MS = 10 * 60_000
+
 export const accountsQuery = queryOptions({
   queryKey: ["account.list"] as const,
   queryFn: () => callCommand("account.list", {}),
-  staleTime: 10_000,
+  staleTime: STALE_MS,
+  gcTime: GC_MS,
 })
 
 export const categoriesQuery = queryOptions({
   queryKey: ["category.list"] as const,
   queryFn: () => callCommand("category.list", {}),
-  staleTime: 10_000,
+  staleTime: STALE_MS,
+  gcTime: GC_MS,
 })
 
 export const transactionsQuery = (filter: InputOf<"transaction.list">) =>
   queryOptions({
     queryKey: ["transaction.list", filter] as const,
     queryFn: () => callCommand("transaction.list", filter),
-    staleTime: 5_000,
+    staleTime: STALE_MS,
+    gcTime: GC_MS,
   })
 
 export const investmentAccountsQuery = queryOptions({
   queryKey: ["investmentAccount.list"] as const,
   queryFn: () => callCommand("investmentAccount.list", {}),
-  staleTime: 10_000,
+  staleTime: STALE_MS,
+  gcTime: GC_MS,
 })
 
 export const instrumentsQuery = queryOptions({
   queryKey: ["instrument.list"] as const,
   queryFn: () => callCommand("instrument.list", {}),
-  staleTime: 10_000,
+  staleTime: STALE_MS,
+  gcTime: GC_MS,
 })
 
 export const holdingsQuery = (
@@ -41,7 +51,8 @@ export const holdingsQuery = (
     queryKey: ["investmentAccount.listHoldings", { accountId }] as const,
     queryFn: () =>
       callCommand("investmentAccount.listHoldings", { accountId }),
-    staleTime: 5_000,
+    staleTime: STALE_MS,
+    gcTime: GC_MS,
   })
 
 export const cashBalancesQuery = (
@@ -51,7 +62,8 @@ export const cashBalancesQuery = (
     queryKey: ["investmentAccount.listCashBalances", { accountId }] as const,
     queryFn: () =>
       callCommand("investmentAccount.listCashBalances", { accountId }),
-    staleTime: 5_000,
+    staleTime: STALE_MS,
+    gcTime: GC_MS,
   })
 
 export const investmentTransactionsQuery = (
@@ -60,7 +72,8 @@ export const investmentTransactionsQuery = (
   queryOptions({
     queryKey: ["investment.list", filter] as const,
     queryFn: () => callCommand("investment.list", filter),
-    staleTime: 5_000,
+    staleTime: STALE_MS,
+    gcTime: GC_MS,
   })
 
 export const invalidationKeys = {

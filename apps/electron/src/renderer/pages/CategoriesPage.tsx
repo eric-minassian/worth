@@ -25,6 +25,7 @@ import {
   SelectItem,
   SelectTrigger,
   SelectValue,
+  Skeleton,
   toast,
 } from "@worth/ui"
 import { callCommand, formatRpcError } from "../rpc"
@@ -101,7 +102,19 @@ export const CategoriesPage = () => {
           </CardDescription>
         </CardHeader>
         <CardContent>
-          {tree.length > 0 ? (
+          {categories.isPending ? (
+            <ul className="flex flex-col gap-1">
+              {Array.from({ length: 6 }).map((_, i) => (
+                <li
+                  key={i}
+                  className="flex items-center gap-2 rounded-md px-2 py-1.5"
+                >
+                  <Skeleton className="size-2.5 rounded-full" />
+                  <Skeleton className="h-3 w-40" />
+                </li>
+              ))}
+            </ul>
+          ) : tree.length > 0 ? (
             <ul className="flex flex-col gap-1">
               {tree.map((node) => (
                 <CategoryRow key={node.id} node={node} depth={0} />

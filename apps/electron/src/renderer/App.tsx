@@ -1,19 +1,11 @@
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query"
+import { QueryClientProvider } from "@tanstack/react-query"
 import { RouterProvider } from "@tanstack/react-router"
 import { useEffect, useState } from "react"
 import { router } from "./routes"
 import { Unlock } from "./pages/Unlock"
 import { BiometricEnrollPrompt } from "./components/BiometricEnrollPrompt"
 import { callCommand } from "./rpc"
-
-const queryClient = new QueryClient({
-  defaultOptions: {
-    queries: {
-      retry: 1,
-      refetchOnWindowFocus: false,
-    },
-  },
-})
+import { queryClient } from "./lib/queryClient"
 
 type VaultState =
   | { status: "checking" }

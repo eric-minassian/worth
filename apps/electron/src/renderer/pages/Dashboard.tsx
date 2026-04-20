@@ -112,7 +112,9 @@ export const Dashboard = () => {
             </CardDescription>
           </CardHeader>
           <CardContent className="px-0">
-            {recent.length === 0 ? (
+            {isLoading ? (
+              <RecentTableSkeleton />
+            ) : recent.length === 0 ? (
               <EmptyState
                 Icon={ListOrdered}
                 title="No transactions yet"
@@ -193,7 +195,9 @@ export const Dashboard = () => {
             </CardDescription>
           </CardHeader>
           <CardContent className="flex flex-col gap-2">
-            {accounts.data?.length
+            {accounts.isPending ? (
+              <AccountsListSkeleton />
+            ) : accounts.data?.length
               ? accounts.data.map((a) => {
                   const bal = balances.get(a.id) ?? 0n
                   return (
@@ -249,7 +253,9 @@ export const Dashboard = () => {
           </CardDescription>
         </CardHeader>
         <CardContent>
-          {topCategories.length === 0 ? (
+          {isLoading ? (
+            <TopCategoriesSkeleton />
+          ) : topCategories.length === 0 ? (
             <EmptyState
               Icon={TrendingUp}
               title="No outflows yet this month"
@@ -414,3 +420,55 @@ const startOfMonth = (ms: number): number => {
   const d = new Date(ms)
   return new Date(d.getFullYear(), d.getMonth(), 1).getTime()
 }
+
+const RecentTableSkeleton = () => (
+  <div className="flex flex-col">
+    {Array.from({ length: 6 }).map((_, i) => (
+      <div
+        key={i}
+        className="grid grid-cols-[90px_1fr_120px_120px_110px] items-center gap-2 border-t px-4 py-3"
+      >
+        <Skeleton className="h-3 w-16" />
+        <Skeleton className="h-3 w-40" />
+        <Skeleton className="h-3 w-20" />
+        <Skeleton className="h-3 w-24" />
+        <Skeleton className="h-3 w-20 justify-self-end" />
+      </div>
+    ))}
+  </div>
+)
+
+const AccountsListSkeleton = () => (
+  <>
+    {Array.from({ length: 4 }).map((_, i) => (
+      <div
+        key={i}
+        className="flex items-center justify-between rounded-md border bg-card/50 px-3 py-2"
+      >
+        <div className="flex items-center gap-2">
+          <Skeleton className="size-6 rounded-md" />
+          <div className="flex flex-col gap-1.5">
+            <Skeleton className="h-3 w-24" />
+            <Skeleton className="h-3 w-16" />
+          </div>
+        </div>
+        <Skeleton className="h-3 w-20" />
+      </div>
+    ))}
+  </>
+)
+
+const TopCategoriesSkeleton = () => (
+  <ul className="flex flex-col gap-1.5">
+    {Array.from({ length: 4 }).map((_, i) => (
+      <li
+        key={i}
+        className="grid grid-cols-[120px_1fr_auto] items-center gap-3"
+      >
+        <Skeleton className="h-3 w-20" />
+        <Skeleton className="h-1.5 w-full rounded-full" />
+        <Skeleton className="h-3 w-16" />
+      </li>
+    ))}
+  </ul>
+)

@@ -65,6 +65,7 @@ import {
   fromDateInput,
 } from "../lib/format"
 import { PageActions } from "../Layout"
+import { TableSkeletonRows } from "../components/TableSkeletonRows"
 
 const COMMON_CURRENCIES: readonly CurrencyCode[] = [
   "USD",
@@ -234,7 +235,9 @@ export const InvestmentsPage = () => {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {accounts.data && accounts.data.length > 0 ? (
+              {accounts.isPending ? (
+                <TableSkeletonRows cols={4} rows={2} />
+              ) : accounts.data && accounts.data.length > 0 ? (
                 accounts.data.map((a) => (
                   <TableRow key={a.id}>
                     <TableCell className="font-medium">{a.name}</TableCell>
@@ -282,7 +285,9 @@ export const InvestmentsPage = () => {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {holdings.data && holdings.data.length > 0 ? (
+              {holdings.isPending ? (
+                <TableSkeletonRows cols={6} rows={3} />
+              ) : holdings.data && holdings.data.length > 0 ? (
                 holdings.data.map((h) => {
                   const instrument = instrumentById.get(h.instrumentId)
                   const account = accountById.get(h.accountId)
@@ -402,7 +407,9 @@ export const InvestmentsPage = () => {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {recentTxns.data && recentTxns.data.length > 0 ? (
+              {recentTxns.isPending ? (
+                <TableSkeletonRows cols={7} rows={4} />
+              ) : recentTxns.data && recentTxns.data.length > 0 ? (
                 recentTxns.data.map((t) => {
                   const instrument = t.instrumentId
                     ? instrumentById.get(t.instrumentId)
@@ -865,3 +872,4 @@ const RecordInvestmentDialog = ({
     </DialogContent>
   )
 }
+

@@ -25,6 +25,7 @@ import {
   SelectItem,
   SelectTrigger,
   SelectValue,
+  Skeleton,
   toast,
 } from "@worth/ui"
 import { callCommand, formatRpcError } from "../rpc"
@@ -190,6 +191,29 @@ export const DuplicatesPage = () => {
             : `Delete ${selectedIds.length}`}
         </Button>
       </div>
+
+      {groupsQuery.isPending && (
+        <ul className="flex flex-col">
+          {Array.from({ length: 3 }).map((_, gi) => (
+            <li
+              key={gi}
+              className={cn("flex flex-col gap-1 py-3", gi > 0 && "border-t")}
+            >
+              <div className="flex items-center gap-3">
+                <Skeleton className="h-3 w-20" />
+                <Skeleton className="h-3 w-16" />
+              </div>
+              {Array.from({ length: 2 }).map((_, ri) => (
+                <div key={ri} className="flex items-center gap-3 px-2 py-1.5">
+                  <Skeleton className="size-4 rounded" />
+                  <Skeleton className="h-3 w-48" />
+                  <Skeleton className="ml-auto h-5 w-16" />
+                </div>
+              ))}
+            </li>
+          ))}
+        </ul>
+      )}
 
       {groupsQuery.data && groups.length === 0 && (
         <div className="flex flex-col items-center gap-2 py-16 text-center text-muted-foreground">
